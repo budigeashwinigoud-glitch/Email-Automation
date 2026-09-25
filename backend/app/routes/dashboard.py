@@ -34,6 +34,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             EmployeeTaskStat(
                 employee_id=emp.id,
                 employee_name=emp.name,
+                department=emp.department,
                 pending=pending_count,
                 sent=sent_count,
                 done=done_count

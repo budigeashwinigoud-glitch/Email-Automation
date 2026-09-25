@@ -18,9 +18,10 @@ def create_task(
 ):
     """
     Create a new task with manual or automatic round-robin assignment.
+    Supports department-specific task allotment and round-robin.
     """
     if payload.assignee == "auto":
-        assigned_employee = get_next_round_robin_employee(db)
+        assigned_employee = get_next_round_robin_employee(db, department=payload.department)
     else:
         # Manual assignment to a specific employee ID
         employee = db.query(Employee).filter(Employee.id == payload.assignee).first()
@@ -36,11 +37,14 @@ def create_task(
             )
         assigned_employee = employee
 
+    task_department = payload.department or (assigned_employee.department if assigned_employee else None)
+
     new_task = Task(
         title=payload.title,
         description=payload.description,
         priority=payload.priority,
         assigned_to=assigned_employee.id,
+        department=task_department,
         status="pending",
         due_date=payload.due_date,
     )
@@ -57,6 +61,7 @@ def get_tasks(
     status: Optional[str] = Query(None, description="Filter by task status (pending, sent, done)"),
     assignee: Optional[int] = Query(None, description="Filter by assigned employee ID"),
     priority: Optional[str] = Query(None, description="Filter by priority (Low, Medium, High)"),
+    department: Optional[str] = Query(None, description="Filter by department"),
     db: Session = Depends(get_db)
 ):
     """
@@ -70,6 +75,8 @@ def get_tasks(
         query = query.filter(Task.assigned_to == assignee)
     if priority:
         query = query.filter(Task.priority == priority)
+    if department:
+        query = query.filter(Task.department == department)
 
     return query.order_by(Task.created_at.desc(), Task.id.desc()).all()
 
@@ -152,6 +159,8 @@ def update_task(
         task.priority = payload.priority
     if payload.due_date is not None:
         task.due_date = payload.due_date
+    if payload.department is not None:
+        task.department = payload.department
 
     if payload.status is not None:
         task.status = payload.status

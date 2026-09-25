@@ -53,6 +53,7 @@ export default function TaskTable({
           <tr>
             <th>ID & Task</th>
             <th>Assigned To</th>
+            <th>Department</th>
             <th>Priority</th>
             <th>Due Date</th>
             <th>Status & Lifecycle</th>
@@ -65,6 +66,7 @@ export default function TaskTable({
             const colors = getAvatarColor(task.assigned_to?.name, task.assigned_to?.id);
             const priorityClass = `badge-priority-${task.priority.toLowerCase()}`;
             const statusClass = `badge-${task.status.toLowerCase()}`;
+            const dept = task.department || task.assigned_to?.department;
 
             return (
               <tr key={task.id}>
@@ -107,6 +109,29 @@ export default function TaskTable({
                       </div>
                     </div>
                   </div>
+                </td>
+
+                {/* Department */}
+                <td>
+                  {dept ? (
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: '#3b82f6',
+                        background: '#eff6ff',
+                        border: '1px solid #dbeafe',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {dept}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>—</span>
+                  )}
                 </td>
 
                 {/* Priority */}

@@ -96,3 +96,34 @@ def test_deactivate_employee(client, seed_employees):
     # Check status
     get_res = client.get(f"/api/employees/{emp_id}")
     assert get_res.json()["active"] is False
+
+
+def test_create_and_filter_employee_department(client):
+    # Register with department
+    res1 = client.post(
+        "/api/employees",
+        json={"name": "Alice Dev", "email": "alice.dev@example.com", "department": "Software Developers"}
+    )
+    assert res1.status_code == 201
+    assert res1.json()["department"] == "Software Developers"
+
+    res2 = client.post(
+        "/api/employees",
+        json={"name": "Bob HR", "email": "bob.hr@example.com", "department": "HR"}
+    )
+    assert res2.status_code == 201
+    assert res2.json()["department"] == "HR"
+
+    # Filter by department
+    filtered_res = client.get("/api/employees?department=Software Developers")
+    assert filtered_res.status_code == 200
+    emps = filtered_res.json()
+    assert len(emps) == 1
+    assert emps[0]["name"] == "Alice Dev"
+
+    # Update department
+    alice_id = res1.json()["id"]
+    update_res = client.put(f"/api/employees/{alice_id}", json={"department": "AI/ML Department"})
+    assert update_res.status_code == 200
+    assert update_res.json()["department"] == "AI/ML Department"
+

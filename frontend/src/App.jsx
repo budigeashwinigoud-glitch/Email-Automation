@@ -4,7 +4,6 @@ import Header from './components/Header';
 import Toast from './components/Toast';
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
-import EmailSimulatorModal from './components/EmailSimulatorModal';
 import { api } from './services/api';
 
 export default function App() {
@@ -12,7 +11,6 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [isCreateEmployeeOpen, setIsCreateEmployeeOpen] = useState(false);
-  const [isEmailSimulatorOpen, setIsEmailSimulatorOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -59,7 +57,6 @@ export default function App() {
         setCurrentTab={setCurrentTab}
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
-        onOpenEmailSimulator={() => setIsEmailSimulatorOpen(true)}
         pendingCount={stats?.pending_tasks || 0}
         employeeCount={stats?.active_employees || 0}
       />
@@ -69,7 +66,6 @@ export default function App() {
           currentTab={currentTab}
           onOpenCreateTask={() => setIsCreateTaskOpen(true)}
           onOpenCreateEmployee={() => setIsCreateEmployeeOpen(true)}
-          onOpenEmailSimulator={() => setIsEmailSimulatorOpen(true)}
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
           onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
@@ -80,8 +76,6 @@ export default function App() {
             <Dashboard
               isCreateTaskOpen={isCreateTaskOpen}
               setIsCreateTaskOpen={setIsCreateTaskOpen}
-              isEmailSimulatorOpen={isEmailSimulatorOpen}
-              setIsEmailSimulatorOpen={setIsEmailSimulatorOpen}
               showToast={showToast}
               refreshTrigger={refreshTrigger}
             />
@@ -95,13 +89,6 @@ export default function App() {
           )}
         </main>
       </div>
-
-      <EmailSimulatorModal
-        isOpen={isEmailSimulatorOpen}
-        onClose={() => setIsEmailSimulatorOpen(false)}
-        onDispatched={handleRefresh}
-        showToast={showToast}
-      />
 
       <Toast toasts={toasts} onDismiss={dismissToast} />
     </div>

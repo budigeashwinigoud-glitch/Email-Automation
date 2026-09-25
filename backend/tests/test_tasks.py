@@ -207,3 +207,51 @@ def test_delete_task(client, seed_employees):
 
     res_get = client.get(f"/api/tasks/{created['id']}")
     assert res_get.status_code == 404
+
+
+def test_create_task_with_department_and_round_robin(client, db_session):
+    from app.models import Employee
+    # Register 2 employees in 'Talented Engineers' and 2 in 'WhatsApp Marketing'
+    eng1 = Employee(name="Engineer 1", email="eng1@belvo.internal", department="Talented Engineers", active=True)
+    eng2 = Employee(name="Engineer 2", email="eng2@belvo.internal", department="Talented Engineers", active=True)
+    mkt1 = Employee(name="Marketer 1", email="mkt1@belvo.internal", department="WhatsApp Marketing", active=True)
+    db_session.add_all([eng1, eng2, mkt1])
+    db_session.commit()
+
+    # Allot 3 tasks to 'Talented Engineers' with assignee 'auto'
+    t1 = client.post("/api/tasks", json={
+        "title": "Build API",
+        "description": "API desc",
+        "priority": "High",
+        "due_date": "2026-10-20",
+        "assignee": "auto",
+        "department": "Talented Engineers"
+    }).json()
+    assert t1["assigned_to"]["name"] == "Engineer 1"
+    assert t1["department"] == "Talented Engineers"
+
+    t2 = client.post("/api/tasks", json={
+        "title": "Optimize DB",
+        "description": "DB desc",
+        "priority": "Medium",
+        "due_date": "2026-10-20",
+        "assignee": "auto",
+        "department": "Talented Engineers"
+    }).json()
+    assert t2["assigned_to"]["name"] == "Engineer 2"
+
+    t3 = client.post("/api/tasks", json={
+        "title": "Fix bug",
+        "description": "Bug desc",
+        "priority": "Low",
+        "due_date": "2026-10-20",
+        "assignee": "auto",
+        "department": "Talented Engineers"
+    }).json()
+    # Cycles back to Engineer 1
+    assert t3["assigned_to"]["name"] == "Engineer 1"
+
+    # Filter tasks by department
+    filtered = client.get("/api/tasks?department=Talented Engineers").json()
+    assert len(filtered) == 3
+

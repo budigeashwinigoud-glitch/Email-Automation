@@ -6,16 +6,14 @@ import KanbanBoard from '../components/KanbanBoard';
 import CreateTaskModal from '../components/CreateTaskModal';
 import EditTaskModal from '../components/EditTaskModal';
 import TaskDetailsModal from '../components/TaskDetailsModal';
-import EmailSimulatorModal from '../components/EmailSimulatorModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { api } from '../services/api';
-import { Plus, Filter, RotateCcw, Search, LayoutGrid, List, Mail } from 'lucide-react';
+import { Plus, Filter, RotateCcw, Search, LayoutGrid, List } from 'lucide-react';
+import { PREDEFINED_DEPARTMENTS } from '../constants/departments';
 
 export default function Dashboard({
   isCreateTaskOpen,
   setIsCreateTaskOpen,
-  isEmailSimulatorOpen,
-  setIsEmailSimulatorOpen,
   showToast,
   refreshTrigger,
 }) {
@@ -28,6 +26,7 @@ export default function Dashboard({
   const [statusFilter, setStatusFilter] = useState('All');
   const [assigneeFilter, setAssigneeFilter] = useState('All');
   const [priorityFilter, setPriorityFilter] = useState('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'kanban'
 
@@ -47,6 +46,7 @@ export default function Dashboard({
           status: statusFilter,
           assignee: assigneeFilter,
           priority: priorityFilter,
+          department: departmentFilter,
         }),
         api.getEmployees(),
       ]);
@@ -59,7 +59,7 @@ export default function Dashboard({
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, assigneeFilter, priorityFilter, showToast]);
+  }, [statusFilter, assigneeFilter, priorityFilter, departmentFilter, showToast]);
 
   useEffect(() => {
     loadDashboardData();
@@ -126,10 +126,23 @@ export default function Dashboard({
     setStatusFilter('All');
     setAssigneeFilter('All');
     setPriorityFilter('All');
+    setDepartmentFilter('All');
     setSearchQuery('');
   };
 
   const activeEmployees = employees.filter((e) => e.active);
+
+  // Collect distinct departments from predefined list, employees, and tasks
+  const availableDepartments = useMemo(() => {
+    const set = new Set(PREDEFINED_DEPARTMENTS);
+    employees.forEach((e) => {
+      if (e.department && e.department.trim()) set.add(e.department.trim());
+    });
+    tasks.forEach((t) => {
+      if (t.department && t.department.trim()) set.add(t.department.trim());
+    });
+    return Array.from(set);
+  }, [employees, tasks]);
 
   // Determine last assigned employee ID from the latest task
   const lastAssignedId = tasks.length > 0 && tasks[0].assigned_to ? tasks[0].assigned_to.id : null;
@@ -167,6 +180,22 @@ export default function Dashboard({
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+
+            {/* Department Filter */}
+            {availableDepartments.length > 0 && (
+              <select
+                className="filter-select"
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+              >
+                <option value="All">All Departments</option>
+                {availableDepartments.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+            )}
 
             {/* Status Pills */}
             <div className="filter-pills">
@@ -226,7 +255,7 @@ export default function Dashboard({
             </div>
 
             {/* Reset Filters */}
-            {(statusFilter !== 'All' || assigneeFilter !== 'All' || priorityFilter !== 'All' || searchQuery) && (
+            {(statusFilter !== 'All' || assigneeFilter !== 'All' || priorityFilter !== 'All' || departmentFilter !== 'All' || searchQuery) && (
               <button
                 className="btn btn-secondary btn-sm"
                 onClick={resetFilters}
@@ -307,13 +336,6 @@ export default function Dashboard({
         task={selectedTask}
         onClose={() => setIsEditOpen(false)}
         onSuccess={handleTaskUpdated}
-      />
-
-      <EmailSimulatorModal
-        isOpen={isEmailSimulatorOpen}
-        onClose={() => setIsEmailSimulatorOpen(false)}
-        onDispatched={loadDashboardData}
-        showToast={showToast}
       />
 
       <ConfirmModal

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, AlertCircle } from 'lucide-react';
 import { api } from '../services/api';
+import { PREDEFINED_DEPARTMENTS } from '../constants/departments';
 
 export default function EditTaskModal({ isOpen, task, onClose, onSuccess }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [department, setDepartment] = useState('');
+  const [customDepartment, setCustomDepartment] = useState('');
   const [priority, setPriority] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [assignee, setAssignee] = useState('');
@@ -17,6 +20,16 @@ export default function EditTaskModal({ isOpen, task, onClose, onSuccess }) {
     if (isOpen && task) {
       setTitle(task.title || '');
       setDescription(task.description || '');
+      if (!task.department) {
+        setDepartment('');
+        setCustomDepartment('');
+      } else if (PREDEFINED_DEPARTMENTS.includes(task.department)) {
+        setDepartment(task.department);
+        setCustomDepartment('');
+      } else {
+        setDepartment('Other');
+        setCustomDepartment(task.department);
+      }
       setPriority(task.priority || '');
       setDueDate(task.due_date || '');
       setAssignee(task.assigned_to ? task.assigned_to.id : '');
@@ -52,11 +65,15 @@ export default function EditTaskModal({ isOpen, task, onClose, onSuccess }) {
       return;
     }
 
+    const effectiveDept =
+      department === 'Other' ? customDepartment.trim() : department.trim();
+
     setLoading(true);
     try {
       const payload = {
         title: title.trim(),
         description: description.trim(),
+        department: effectiveDept || null,
         priority,
         due_date: dueDate,
         assignee: parseInt(assignee, 10),
@@ -118,6 +135,41 @@ export default function EditTaskModal({ isOpen, task, onClose, onSuccess }) {
                 onChange={(e) => setDescription(e.target.value)}
                 required
               />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Department</label>
+              <select
+                className="form-select"
+                value={department}
+                onChange={(e) => {
+                  setDepartment(e.target.value);
+                  if (e.target.value !== 'Other') {
+                    setCustomDepartment('');
+                  }
+                }}
+              >
+                <option value="">-- General / No Department --</option>
+                {PREDEFINED_DEPARTMENTS.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+                <option value="Other">Other (Custom Department)</option>
+              </select>
+
+              {department === 'Other' && (
+                <div style={{ marginTop: '8px' }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Enter custom department name..."
+                    value={customDepartment}
+                    onChange={(e) => setCustomDepartment(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
             </div>
 
             <div className="form-row">

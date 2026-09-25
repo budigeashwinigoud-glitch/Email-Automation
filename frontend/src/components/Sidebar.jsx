@@ -6,7 +6,6 @@ export default function Sidebar({
   setCurrentTab,
   isOpen,
   setIsOpen,
-  onOpenEmailSimulator,
   pendingCount = 0,
   employeeCount = 0,
 }) {
@@ -49,50 +48,7 @@ export default function Sidebar({
             <span>Employees</span>
             {employeeCount > 0 && <span className="nav-item-badge">{employeeCount}</span>}
           </button>
-
-          <div className="nav-section-title" style={{ marginTop: '12px' }}>
-            Integrations & Tools
-          </div>
-
-          <button
-            className="nav-item"
-            onClick={() => {
-              onOpenEmailSimulator();
-              setIsOpen(false);
-            }}
-          >
-            <Mail size={18} />
-            <span>Email Simulator</span>
-            <span
-              style={{
-                marginLeft: 'auto',
-                fontSize: '10px',
-                background: 'rgba(59, 130, 246, 0.25)',
-                color: '#93c5fd',
-                padding: '2px 6px',
-                borderRadius: 'var(--radius-sm)',
-                fontWeight: 700,
-              }}
-            >
-              Test
-            </span>
-          </button>
         </nav>
-
-        {/* Informative Engine Box */}
-        <div className="sidebar-card">
-          <div className="sidebar-card-title">
-            <Sparkles size={14} color="#60a5fa" />
-            <span>Round-Robin Engine</span>
-          </div>
-          <div className="sidebar-card-text">
-            Deterministic cyclic assignment with database state persistence and inactive employee bypass.
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#38bdf8' }}>
-            <span className="pulse-dot"></span>
-            <span>Active & Persisted</span>
-          </div>
-        </div>
 
         <div className="sidebar-footer">
           <div>

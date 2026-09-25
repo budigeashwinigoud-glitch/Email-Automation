@@ -53,12 +53,16 @@ export const api = {
   // --------------------------------------------------------------------------
   // Employees API
   // --------------------------------------------------------------------------
-  getEmployees: (active = null) => {
-    let query = '';
+  getEmployees: (active = null, department = null) => {
+    const params = new URLSearchParams();
     if (active !== null && active !== undefined) {
-      query = `?active=${Boolean(active)}`;
+      params.append('active', Boolean(active));
     }
-    return request(`/api/employees${query}`);
+    if (department && department !== 'All') {
+      params.append('department', department);
+    }
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/employees${queryString}`);
   },
 
   getEmployee: (employeeId) => request(`/api/employees/${employeeId}`),
@@ -93,6 +97,9 @@ export const api = {
     }
     if (filters.priority && filters.priority !== 'All') {
       params.append('priority', filters.priority);
+    }
+    if (filters.department && filters.department !== 'All') {
+      params.append('department', filters.department);
     }
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return request(`/api/tasks${queryString}`);

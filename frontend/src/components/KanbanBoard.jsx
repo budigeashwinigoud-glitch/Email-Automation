@@ -90,10 +90,27 @@ export default function KanbanBoard({
                 return (
                   <div key={task.id} className="kanban-card">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span className={`badge ${priorityClass}`}>
-                        <span className="badge-dot"></span>
-                        {task.priority}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span className={`badge ${priorityClass}`}>
+                          <span className="badge-dot"></span>
+                          {task.priority}
+                        </span>
+                        {(task.department || task.assigned_to?.department) && (
+                          <span
+                            style={{
+                              fontSize: '10.5px',
+                              fontWeight: 600,
+                              color: '#3b82f6',
+                              background: '#eff6ff',
+                              border: '1px solid #dbeafe',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            {task.department || task.assigned_to?.department}
+                          </span>
+                        )}
+                      </div>
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>
                         #{task.id}
                       </span>

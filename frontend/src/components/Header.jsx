@@ -5,7 +5,6 @@ export default function Header({
   currentTab,
   onOpenCreateTask,
   onOpenCreateEmployee,
-  onOpenEmailSimulator,
   onRefresh,
   isRefreshing,
   onToggleSidebar,
@@ -45,21 +44,10 @@ export default function Header({
         </button>
 
         {currentTab === 'tasks' ? (
-          <>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={onOpenEmailSimulator}
-              title="Inspect pending email dispatch queue"
-            >
-              <Mail size={14} color="var(--primary)" />
-              <span>Email Dispatcher</span>
-            </button>
-
-            <button className="btn btn-primary" onClick={onOpenCreateTask}>
-              <Plus size={16} />
-              <span>Create Task</span>
-            </button>
-          </>
+          <button className="btn btn-primary" onClick={onOpenCreateTask}>
+            <Plus size={16} />
+            <span>Create Task</span>
+          </button>
         ) : (
           <button className="btn btn-primary" onClick={onOpenCreateEmployee}>
             <UserPlus size={16} />

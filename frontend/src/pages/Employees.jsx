@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Users, UserPlus, Edit2, UserX, AlertCircle, X, CheckCircle2, Search, List, LayoutGrid, Plus, Sparkles } from 'lucide-react';
+import { Users, UserPlus, Edit2, UserX, AlertCircle, X, CheckCircle2, Search, List, LayoutGrid, Plus, Sparkles, Building2 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { api } from '../services/api';
 import { getAvatarColor, getInitials } from '../utils/colors';
+import { PREDEFINED_DEPARTMENTS } from '../constants/departments';
 
 export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, refreshTrigger, onAllotTaskToEmployee }) {
   const [employees, setEmployees] = useState([]);
@@ -23,15 +24,22 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
   // Add Employee Form State
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [newDepartment, setNewDepartment] = useState(''); // dropdown selection
+  const [newCustomDepartment, setNewCustomDepartment] = useState(''); // custom input when 'Other' selected
   const [submittingAdd, setSubmittingAdd] = useState(false);
   const [addError, setAddError] = useState('');
 
   // Edit Employee Form State
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editDepartment, setEditDepartment] = useState(''); // dropdown selection
+  const [editCustomDepartment, setEditCustomDepartment] = useState(''); // custom input when 'Other' selected
   const [editActive, setEditActive] = useState(true);
   const [submittingEdit, setSubmittingEdit] = useState(false);
   const [editError, setEditError] = useState('');
+
+  // Department filter
+  const [departmentFilter, setDepartmentFilter] = useState('All');
 
   const loadData = useCallback(async () => {
     try {
@@ -41,7 +49,7 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
       if (activeFilter === 'inactive') filterParam = false;
 
       const [empsData, statsData] = await Promise.all([
-        api.getEmployees(filterParam),
+        api.getEmployees(filterParam, departmentFilter),
         api.getDashboardStats(),
       ]);
 
@@ -52,20 +60,36 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
     } finally {
       setLoading(false);
     }
-  }, [activeFilter, showToast]);
+  }, [activeFilter, departmentFilter, showToast]);
 
   useEffect(() => {
     loadData();
   }, [loadData, refreshTrigger]);
 
+  // Distinct departments combining predefined list with any custom ones in DB
+  const availableDepartments = useMemo(() => {
+    const set = new Set(PREDEFINED_DEPARTMENTS);
+    employees.forEach((e) => {
+      if (e.department && e.department.trim()) set.add(e.department.trim());
+    });
+    return Array.from(set);
+  }, [employees]);
+
   // Client search
   const filteredEmployees = useMemo(() => {
-    if (!searchQuery.trim()) return employees;
+    let list = employees;
+    if (departmentFilter !== 'All') {
+      list = list.filter((e) => e.department === departmentFilter);
+    }
+    if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase().trim();
-    return employees.filter(
-      (e) => e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q)
+    return list.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        e.email.toLowerCase().includes(q) ||
+        (e.department && e.department.toLowerCase().includes(q))
     );
-  }, [employees, searchQuery]);
+  }, [employees, searchQuery, departmentFilter]);
 
   // Employee workload mapping
   const employeeTaskStats = useMemo(() => {
@@ -86,15 +110,30 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
       return;
     }
 
+    const effectiveDept =
+      newDepartment === 'Other' ? newCustomDepartment.trim() : newDepartment.trim();
+
+    if (newDepartment === 'Other' && !newCustomDepartment.trim()) {
+      setAddError('Please enter the custom department name or choose an existing department.');
+      return;
+    }
+
     setSubmittingAdd(true);
     try {
       const created = await api.createEmployee({
         name: newName.trim(),
         email: newEmail.trim(),
+        department: effectiveDept || null,
       });
-      showToast('success', 'Employee Registered', `${created.name} (${created.email}) added to round-robin rotation.`);
+      showToast(
+        'success',
+        'Employee Registered',
+        `${created.name} (${created.email}) added to round-robin rotation.`
+      );
       setNewName('');
       setNewEmail('');
+      setNewDepartment('');
+      setNewCustomDepartment('');
       setIsCreateOpen(false);
       loadData();
     } catch (err) {
@@ -108,6 +147,16 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
     setEditingEmployee(emp);
     setEditName(emp.name);
     setEditEmail(emp.email);
+    if (!emp.department) {
+      setEditDepartment('');
+      setEditCustomDepartment('');
+    } else if (PREDEFINED_DEPARTMENTS.includes(emp.department)) {
+      setEditDepartment(emp.department);
+      setEditCustomDepartment('');
+    } else {
+      setEditDepartment('Other');
+      setEditCustomDepartment(emp.department);
+    }
     setEditActive(emp.active);
     setEditError('');
     setIsEditOpen(true);
@@ -121,11 +170,20 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
       return;
     }
 
+    const effectiveDept =
+      editDepartment === 'Other' ? editCustomDepartment.trim() : editDepartment.trim();
+
+    if (editDepartment === 'Other' && !editCustomDepartment.trim()) {
+      setEditError('Please enter the custom department name or choose an existing department.');
+      return;
+    }
+
     setSubmittingEdit(true);
     try {
       const updated = await api.updateEmployee(editingEmployee.id, {
         name: editName.trim(),
         email: editEmail.trim(),
+        department: effectiveDept || null,
         active: editActive,
       });
       showToast('success', 'Employee Updated', `${updated.name}'s details were updated.`);
@@ -213,6 +271,22 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
               </button>
             </div>
 
+            {/* Department Filter */}
+            {availableDepartments.length > 0 && (
+              <select
+                className="filter-select"
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+              >
+                <option value="All">All Departments</option>
+                {availableDepartments.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+            )}
+
             {/* View Mode Toggle */}
             <div className="view-toggle">
               <button
@@ -287,6 +361,24 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                       <div className="employee-card-email" title={emp.email}>
                         {emp.email}
                       </div>
+                      {emp.department && (
+                        <div style={{ marginTop: '4px' }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              color: '#3b82f6',
+                              background: '#eff6ff',
+                              border: '1px solid #dbeafe',
+                              padding: '1px 7px',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            {emp.department}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -376,6 +468,7 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                 <tr>
                   <th>Employee</th>
                   <th>Email</th>
+                  <th>Department</th>
                   <th>Status</th>
                   <th>Pending</th>
                   <th>Sent</th>
@@ -407,6 +500,26 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                         </div>
                       </td>
                       <td style={{ color: 'var(--text-secondary)' }}>{emp.email}</td>
+                      <td>
+                        {emp.department ? (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              color: '#3b82f6',
+                              background: '#eff6ff',
+                              border: '1px solid #dbeafe',
+                              padding: '1px 7px',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            {emp.department}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>—</span>
+                        )}
+                      </td>
                       <td>
                         <span className={`badge badge-${emp.active ? 'active' : 'inactive'}`}>
                           <span className="badge-dot"></span>
@@ -504,6 +617,44 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                     New employees are active by default and automatically enter future round-robin assignments.
                   </div>
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Department</label>
+                  <select
+                    className="form-select"
+                    value={newDepartment}
+                    onChange={(e) => {
+                      setNewDepartment(e.target.value);
+                      if (e.target.value !== 'Other') {
+                        setNewCustomDepartment('');
+                      }
+                    }}
+                  >
+                    <option value="">-- Select Department --</option>
+                    {availableDepartments.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                    <option value="Other">Other (Create New Department)</option>
+                  </select>
+
+                  {newDepartment === 'Other' && (
+                    <div style={{ marginTop: '8px' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Enter new department name..."
+                        value={newCustomDepartment}
+                        onChange={(e) => setNewCustomDepartment(e.target.value)}
+                        required
+                      />
+                    </div>
+                  )}
+
+                  <div className="form-help">
+                    Select the employee's department, or choose "Other" to enter a new one manually.
+                  </div>
+                </div>
               </div>
               <div className="modal-footer">
                 <button
@@ -560,6 +711,40 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                     onChange={(e) => setEditEmail(e.target.value)}
                     required
                   />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Department</label>
+                  <select
+                    className="form-select"
+                    value={editDepartment}
+                    onChange={(e) => {
+                      setEditDepartment(e.target.value);
+                      if (e.target.value !== 'Other') {
+                        setEditCustomDepartment('');
+                      }
+                    }}
+                  >
+                    <option value="">-- Select Department --</option>
+                    {availableDepartments.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                    <option value="Other">Other (Create New Department)</option>
+                  </select>
+
+                  {editDepartment === 'Other' && (
+                    <div style={{ marginTop: '8px' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Enter new department name..."
+                        value={editCustomDepartment}
+                        onChange={(e) => setEditCustomDepartment(e.target.value)}
+                        required
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Rotation Status</label>

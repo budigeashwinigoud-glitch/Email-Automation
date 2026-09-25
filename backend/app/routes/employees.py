@@ -12,14 +12,17 @@ router = APIRouter(prefix="/api/employees", tags=["Employees"])
 @router.get("", response_model=List[EmployeeResponse])
 def get_employees(
     active: Optional[bool] = Query(None, description="Filter by active status"),
+    department: Optional[str] = Query(None, description="Filter by department"),
     db: Session = Depends(get_db)
 ):
     """
-    Retrieve all employees with optional active status filtering.
+    Retrieve all employees with optional active status and department filtering.
     """
     query = db.query(Employee)
     if active is not None:
         query = query.filter(Employee.active == active)
+    if department:
+        query = query.filter(Employee.department == department)
     return query.order_by(Employee.id.asc()).all()
 
 
@@ -42,6 +45,7 @@ def create_employee(
     employee = Employee(
         name=payload.name,
         email=payload.email,
+        department=payload.department,
         active=True
     )
     db.add(employee)
@@ -98,6 +102,9 @@ def update_employee(
 
     if payload.name is not None:
         employee.name = payload.name
+
+    if payload.department is not None:
+        employee.department = payload.department
 
     if payload.active is not None:
         employee.active = payload.active

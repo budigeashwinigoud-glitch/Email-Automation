@@ -156,7 +156,7 @@ export default function TaskDetailsModal({ isOpen, task, onClose, onStatusUpdate
               <label className="form-label" style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
                 PRIORITY & DUE DATE
               </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
                 <span className={`badge badge-priority-${task.priority.toLowerCase()}`}>
                   <span className="badge-dot"></span>
                   {task.priority} Priority
@@ -164,6 +164,21 @@ export default function TaskDetailsModal({ isOpen, task, onClose, onStatusUpdate
                 <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)', fontWeight: 600 }}>
                   Due {task.due_date}
                 </span>
+                {(task.department || task.assigned_to?.department) && (
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: '#3b82f6',
+                      background: '#eff6ff',
+                      border: '1px solid #dbeafe',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    {task.department || task.assigned_to?.department}
+                  </span>
+                )}
               </div>
             </div>
           </div>

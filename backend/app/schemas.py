@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, mo
 class EmployeeBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
+    department: Optional[str] = Field(None, max_length=100)
 
     @field_validator("name")
     @classmethod
@@ -18,6 +19,14 @@ class EmployeeBase(BaseModel):
             raise ValueError("Employee name cannot be empty or blank")
         return stripped
 
+    @field_validator("department")
+    @classmethod
+    def clean_department(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            stripped = v.strip()
+            return stripped if stripped else None
+        return v
+
 
 class EmployeeCreate(EmployeeBase):
     pass
@@ -26,6 +35,7 @@ class EmployeeCreate(EmployeeBase):
 class EmployeeUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     email: Optional[EmailStr] = None
+    department: Optional[str] = Field(None, max_length=100)
     active: Optional[bool] = None
 
     @field_validator("name")
@@ -38,11 +48,20 @@ class EmployeeUpdate(BaseModel):
             return stripped
         return v
 
+    @field_validator("department")
+    @classmethod
+    def clean_department(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            stripped = v.strip()
+            return stripped if stripped else None
+        return v
+
 
 class EmployeeBrief(BaseModel):
     id: int
     name: str
     email: str
+    department: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -51,6 +70,7 @@ class EmployeeResponse(BaseModel):
     id: int
     name: str
     email: str
+    department: Optional[str] = None
     active: bool
     created_at: datetime
 
@@ -69,6 +89,7 @@ class TaskCreate(BaseModel):
     description: str = Field(..., min_length=1)
     priority: PriorityType
     due_date: date
+    department: Optional[str] = Field(None, max_length=100)
     assignee: Union[int, Literal["auto"], str] = Field(..., description="'auto' or employee ID")
 
     @field_validator("title", "description")
@@ -97,6 +118,7 @@ class TaskUpdate(BaseModel):
     description: Optional[str] = Field(None, min_length=1)
     priority: Optional[PriorityType] = None
     due_date: Optional[date] = None
+    department: Optional[str] = Field(None, max_length=100)
     assignee: Optional[int] = None
     status: Optional[StatusType] = None
 
@@ -121,6 +143,7 @@ class TaskResponse(BaseModel):
     description: str
     priority: str
     due_date: date
+    department: Optional[str] = None
     assigned_to: EmployeeBrief
     status: str
     created_at: datetime
@@ -134,16 +157,19 @@ class TaskResponse(BaseModel):
     def transform_assigned_to(cls, data: Any) -> Any:
         if hasattr(data, "assigned_employee"):
             emp = data.assigned_employee
+            dept = getattr(data, "department", None) or (emp.department if emp else None)
             return {
                 "id": data.id,
                 "title": data.title,
                 "description": data.description,
                 "priority": data.priority,
                 "due_date": data.due_date,
+                "department": dept,
                 "assigned_to": {
                     "id": emp.id,
                     "name": emp.name,
                     "email": emp.email,
+                    "department": emp.department,
                 } if emp else None,
                 "status": data.status,
                 "created_at": data.created_at,
@@ -159,6 +185,7 @@ class TaskResponse(BaseModel):
 class EmployeeTaskStat(BaseModel):
     employee_id: int
     employee_name: str
+    department: Optional[str] = None
     pending: int
     sent: int
     done: int

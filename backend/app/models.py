@@ -9,6 +9,7 @@ class Employee(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     email = Column(String(150), unique=True, index=True, nullable=False)
+    department = Column(String(100), nullable=True, index=True)
     active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
@@ -23,6 +24,7 @@ class Task(Base):
     description = Column(Text, nullable=False)
     priority = Column(String(20), nullable=False)  # "Low", "Medium", "High"
     assigned_to = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    department = Column(String(100), nullable=True, index=True)
     status = Column(String(20), default="pending", nullable=False)  # "pending", "sent", "done"
     due_date = Column(Date, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -36,5 +38,6 @@ class RoundRobinState(Base):
     __tablename__ = "round_robin_state"
 
     id = Column(Integer, primary_key=True, index=True)
+    department = Column(String(100), nullable=True, index=True)
     last_assigned_employee_id = Column(Integer, nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
