@@ -1,153 +1,130 @@
 # Belvo — Automated Task Allotment via Email (Frontend & Backend)
 
-**Intern Project Core Implementation: HR Dashboard & REST API Engine**
-
-> [!IMPORTANT]
-> **Separation of Concerns: Email Delivery & Automation**  
-> Email delivery and scheduled automation are **intentionally separated** from this frontend/backend module. Another teammate is responsible for implementing the email sending service and scheduler.  
-> 
-> The future email automation service integrates seamlessly using:
-> - `GET /api/tasks/pending` to retrieve tasks queued for dispatch.
-> - `PATCH /api/tasks/{task_id}/status` to update delivery status (`sent` or `done`).
+> **Intern Project Implementation: Core HR Task Management Platform & REST API Engine**  
+> **Repository:** [https://github.com/budigeashwinigoud-glitch/Email-Automation](https://github.com/budigeashwinigoud-glitch/Email-Automation)
 
 ---
 
-## 1. Project Overview
+## 📌 Scope of Responsibility & Separation of Concerns
 
-The **Belvo Automated Task Allotment System** is an enterprise-grade HR task management tool. It enables HR managers to intake, assign, track, and manage employee tasks with deterministic round-robin or manual assignment, real-time status tracking, and automated lifecycle transitions.
+I am responsible **ONLY** for the **FRONTEND and BACKEND** systems.
+
+### 🚫 Excluded from this Scope (To Be Built by Teammate)
+The following modules are **intentionally not implemented here** and will be handled by a dedicated email scheduler microservice built by another teammate:
+- No Gmail OAuth or Gmail integration
+- No direct SMTP clients
+- No third-party email providers (SendGrid, Mailgun, AWS SES)
+- No actual outgoing email delivery
+- No background cron jobs, Celery workers, APScheduler, or node-cron
+
+### 🔌 Teammate Integration Contract
+The backend exposes clean, production-grade endpoints for the external email automation worker to consume:
+1. **`GET /api/tasks/pending`**: Retrieves all tasks queued for email dispatch along with assigned employee contact details.
+2. **`PATCH /api/tasks/{id}/status`**: Allows the worker to advance task status to `sent` (email delivered) or `done` (task completed), automatically capturing server audit timestamps (`sent_at`, `completed_at`).
+
+---
+
+## 🚀 What Was Built Until Now (Completed Deliverables)
+
+### 1. Department Architecture & Dynamic Organization Structure
+- [x] **11 Predefined Departments**: Built-in support for all organizational departments:
+  1. **WhatsApp Marketing**
+  2. **Social Media Manager**
+  3. **HR**
+  4. **Analyst Department**
+  5. **Talented Engineers**
+  6. **Cybersecurity**
+  7. **AI/ML Department**
+  8. **Web Developer**
+  9. **Software Developers**
+  10. **Graphic**
+  11. **Founder Office**
+- [x] **"Other" Custom Department Creation**: Users can select *"Other (Create New Department)"* across all employee and task modals, which opens an input field to create and enter new departments manually. Newly created departments immediately appear across all dropdowns and filters.
+- [x] **Department-Based Employee Selection**: When allotting tasks manually, selecting a department instantly filters the employee dropdown to display only active staff belonging to that specific department.
+- [x] **Department-Specific Round-Robin Rotation**: When auto-assigning a task with a department chosen, the round-robin engine deterministically cycles through active employees within that department pool.
+- [x] **Department Visibility & Filtering**: Department badges and columns displayed across the Task Table, Kanban Board, Employee Grid Cards, Employee Table, and Task Details Modal, with real-time department filter dropdowns.
+
+### 2. HR Web Dashboard (Frontend)
+- [x] **Dual Viewing Modes**: Seamless toggle between an interactive **Data Table** and a visual **Kanban Board** (`Pending Delivery` → `Sent / In Progress` → `Completed`).
+- [x] **Zero Default Values Constraint**: Forms (Task Creation, Employee Registration, Priority, Due Date, Assignment Mode) start completely empty without assumptions, enforcing deliberate user input.
+- [x] **Clean Database Initialization**: No fake or hardcoded mock data seeded on startup; the application starts with zero default tasks and zero default employees.
+- [x] **Live Task Search & Multi-Criteria Filtering**: Instant client-side search across task titles, descriptions, employee names, and emails, combined with backend filters by Status, Assignee, Priority, and Department.
+- [x] **Staff Management Directory**:
+  - Add new employees with name, unique email, and department selection / creation.
+  - Edit existing employee details, departments, and active rotation status.
+  - Soft-deactivate employees to bypass them from future rotations while strictly preserving historical task audit trails.
+  - Visual workload progress bars and per-employee task completion counters.
+- [x] **De-cluttered, Modern UI/UX**: Removed redundant corner widgets, testing simulators, and duplicate notices for a clean, distraction-free enterprise interface.
+
+### 3. FastAPI REST Engine & Database (Backend)
+- [x] **High-Performance Asynchronous REST API**: Built with FastAPI, Pydantic v2 schemas, and strict request/response data validation.
+- [x] **SQLite Database & SQLAlchemy 2.0 ORM**: Fully relational schema with `employees`, `tasks`, and `round_robin_state` tables.
+- [x] **Deterministic Round-Robin Algorithm**:
+  - Cyclically distributes tasks across dynamic numbers of active employees ($N \ge 1$).
+  - Persists rotation state directly in SQLite (`round_robin_state`), making it completely resilient across backend server restarts.
+  - Seamlessly skips deactivated employees and incorporates newly added staff into future rounds.
+  - Supports both global and per-department round-robin states.
+  - Manual assignments do not alter or disrupt the cyclical sequence.
+- [x] **Automated Audit Timestamps**: Accurate tracking of `created_at`, `sent_at`, and `completed_at` with UTC timezone awareness.
+- [x] **Real-Time Aggregations**: `/api/dashboard/stats` delivers live counts for total tasks, pending, sent, done, active employees, and workload distribution.
+
+### 4. Automated Testing Suite
+- [x] **35 Pytest Unit & Integration Tests**: Comprehensive automated test coverage including:
+  - Global and per-department round-robin cycle verification.
+  - Algorithm persistence across database sessions and service restarts.
+  - Inactive employee bypass and dynamic employee entry into future rounds.
+  - Task creation, validation, filtering, status transitions, and deletion.
+  - Employee uniqueness validation, updates, and soft-deactivation.
+
+---
+
+## 🛠️ System Architecture
 
 ```
-HR Manager
-    ↓  Creates task via React Dashboard
-FastAPI Backend
-    ↓  Validates, persists, & assigns (Manual or Deterministic Round-Robin)
-SQLite Database
-    ↓  Task saved with status = 'pending'
-Future Email Service
-    ↓  Fetches pending tasks: GET /api/tasks/pending
-    ↓  Dispatches email notification to assignee
-    ↓  Updates status: PATCH /api/tasks/{id}/status → "sent"
-Employee Completes Task
-    ↓  Updates status: PATCH /api/tasks/{id}/status → "done"
+┌────────────────────────────────────────────────────────┐
+│                   HR Manager (Web UI)                  │
+│   • Task Intake & Assignment (Auto / Manual)           │
+│   • Department Selection & Custom Department Creation  │
+│   • Live Kanban Board & Task Table Views               │
+│   • Staff Directory & Workload Metrics                 │
+└───────────────────────────┬────────────────────────────┘
+                            │ HTTP / JSON
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                   FastAPI Backend                      │
+│   • REST Routes: /api/tasks, /api/employees, /stats    │
+│   • Departmental Deterministic Round-Robin Service     │
+│   • Pydantic v2 Validation & Relationship Handling     │
+└───────────────────────────┬────────────────────────────┘
+                            │ SQLAlchemy ORM
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                 SQLite Database (belvo.db)             │
+│   • employees (id, name, email, department, active)    │
+│   • tasks (id, title, desc, dept, status, dates)       │
+│   • round_robin_state (dept, last_assigned_id)         │
+└───────────────────────────▲────────────────────────────┘
+                            │
+               ┌────────────┴────────────┐
+               │  Future Email Worker    │
+               │  (Teammate's Scope)     │
+               │  GET  /api/tasks/pending│
+               │  PATCH /tasks/{id}/stat │
+               └─────────────────────────┘
 ```
 
 ---
 
-## 2. Objective
-
-To deliver a production-style, modular, robust **Frontend and Backend** system:
-- **HR Web Dashboard**: Create tasks, view live statistics, filter tasks, edit details, and manage dynamic employee directories.
-- **Backend API & ORM**: Fast, asynchronous REST API with validation, relationships, and error handling.
-- **Deterministic Round-Robin Allotment**: Scalable algorithm that handles arbitrary employee counts, server restarts, inactive employee skipping, and dynamic additions.
-- **Integration Endpoints**: Clean, standardized endpoints ready for the email automation microservice.
-
----
-
-## 3. Architecture
-
-```
-belvo/
-├── backend/
-│   ├── app/
-│   │   ├── main.py               # FastAPI application & lifespan startup
-│   │   ├── config.py             # Pydantic BaseSettings & env configs
-│   │   ├── database.py           # SQLAlchemy engine & session factory
-│   │   ├── models.py             # Employee, Task, RoundRobinState models
-│   │   ├── schemas.py            # Pydantic v2 validation & response schemas
-│   │   ├── seed.py               # Configurable initial employee seed data
-│   │   ├── routes/
-│   │   │   ├── employees.py      # Employee CRUD & deactivation routes
-│   │   │   ├── tasks.py          # Task intake, filtering, & pending endpoint
-│   │   │   └── dashboard.py      # Live statistical aggregations
-│   │   └── services/
-│   │       └── assignment.py     # Persistent round-robin algorithm
-│   ├── tests/
-│   │   ├── conftest.py           # In-memory test fixtures & TestClient
-│   │   ├── test_assignment.py    # Round-robin lifecycle & persistence tests
-│   │   ├── test_employees.py     # Employee management & validation tests
-│   │   ├── test_tasks.py         # Task CRUD, filters, & status tests
-│   │   └── test_dashboard.py     # Statistics calculation tests
-│   ├── requirements.txt
-│   ├── .env.example
-│   └── README.md
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Header.jsx
-│   │   │   ├── Sidebar.jsx
-│   │   │   ├── StatsCards.jsx
-│   │   │   ├── TaskTable.jsx
-│   │   │   ├── CreateTaskModal.jsx
-│   │   │   ├── EditTaskModal.jsx
-│   │   │   ├── TaskDetailsModal.jsx
-│   │   │   ├── ConfirmModal.jsx
-│   │   │   └── Toast.jsx
-│   │   ├── pages/
-│   │   │   ├── Dashboard.jsx     # Main HR view with metrics & filters
-│   │   │   └── Employees.jsx     # Employee directory & management
-│   │   ├── services/
-│   │   │   └── api.js            # Centralized API service
-│   │   ├── styles/
-│   │   │   └── index.css         # Modern, responsive design system
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── package.json
-│   ├── vite.config.js
-│   └── .env.example
-│
-└── README.md
-```
-
----
-
-## 4. Features
-
-1. **HR Task Intake**:
-   - Title and description validation.
-   - Priority levels: `Low`, `Medium`, `High`.
-   - Due date assignment.
-   - Dual-assignment mode: **Auto Assign (Round-Robin)** or **Direct Manual Assignment** to any active employee.
-2. **Deterministic Round-Robin Assignment Engine**:
-   - Persists state in SQLite (`round_robin_state` table).
-   - Survives backend restarts without losing cyclical sequence.
-   - Adapts to any employee count ($N \ge 1$).
-   - Automatically skips deactivated employees.
-   - Integrates newly created employees into future rounds.
-   - Manual assignments do not interfere with or advance the queue.
-3. **Dynamic Employee Management**:
-   - Not restricted to hardcoded employees.
-   - Supports adding, editing, and soft-deactivating employees (`active = false`).
-   - Soft deactivation preserves historical task relations and prevents invalid allocations.
-4. **Task Lifecycle Management**:
-   - Status progression: `pending` → `sent` → `done`.
-   - Timestamp auditing: records `created_at`, `sent_at`, and `completed_at`.
-5. **Real-time Metrics**:
-   - Database-backed counts for Total, Pending, Sent, Completed, and Active Employees.
-   - Per-employee breakdown of task statuses.
-6. **Task Filtering**:
-   - Real-time backend filtering by Status, Assignee, and Priority.
-
----
-
-## 5. Tech Stack
-
-- **Frontend**: React 18, Vite, Lucide Icons, Modern CSS Design System.
-- **Backend**: Python 3.10+, FastAPI, SQLAlchemy 2.0, Pydantic v2, Uvicorn.
-- **Database**: SQLite (local single-file persistent database: `belvo.db`).
-- **Testing**: Pytest, HTTPX TestClient.
-
----
-
-## 6. Database Schema
+## 🗄️ Database Entity-Relationship Diagram
 
 ```mermaid
 erDiagram
-    EMPLOYEE ||--o{ TASK : "is assigned to"
+    EMPLOYEE ||--o{ TASK : "assigned to"
     EMPLOYEE {
         int id PK
         string name
         string email UK
+        string department
         boolean active
         datetime created_at
     }
@@ -157,6 +134,7 @@ erDiagram
         text description
         string priority
         int assigned_to FK
+        string department
         string status
         date due_date
         datetime created_at
@@ -165,6 +143,7 @@ erDiagram
     }
     ROUND_ROBIN_STATE {
         int id PK
+        string department
         int last_assigned_employee_id
         datetime updated_at
     }
@@ -172,162 +151,192 @@ erDiagram
 
 ---
 
-## 7. Assignment Logic
+## 📋 API Endpoints Reference
 
-The algorithm in [`backend/app/services/assignment.py`](file:///backend/app/services/assignment.py):
-1. Queries all active employees sorted by `id ASC`.
-2. If no active employees exist, raises HTTP `400 Bad Request`.
-3. Retrieves the singleton `RoundRobinState` record from the database.
-4. If this is the first execution (`last_assigned_employee_id is None`), assigns to the first active employee.
-5. If `last_assigned_employee_id` is present in active employees:
-   $$\text{next\_index} = (\text{current\_index} + 1) \pmod{\text{total\_active\_employees}}$$
-6. If the previous employee was deactivated or removed, finds the next active employee with `id > last_id` or wraps to index 0.
-7. Commits the updated `last_assigned_employee_id` to SQLite.
+### 1. Employees (`/api/employees`)
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/employees` | List employees. Optional query filters: `?active=true` and `?department=...` |
+| `POST` | `/api/employees` | Register new employee (validates unique email, accepts department) |
+| `GET` | `/api/employees/{id}` | Retrieve single employee details by ID |
+| `PUT` | `/api/employees/{id}` | Update employee name, email, department, or active status |
+| `DELETE`| `/api/employees/{id}` | Soft-deactivate employee (`active = false`), preserving task records |
 
----
+### 2. Tasks (`/api/tasks`)
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/tasks` | Create task with manual ID or `assignee="auto"` (supports department rotation) |
+| `GET` | `/api/tasks` | List tasks (newest first, filters by `status`, `assignee`, `priority`, `department`) |
+| `GET` | `/api/tasks/pending` | **Email Automation Integration**: Retrieve all tasks with status `pending` |
+| `GET` | `/api/tasks/{id}` | Retrieve single task with employee details |
+| `PUT` | `/api/tasks/{id}` | Update task title, description, priority, due date, department, assignee |
+| `PATCH`| `/api/tasks/{id}/status` | Advance status (`pending` → `sent` → `done`), auto-updating audit timestamps |
+| `DELETE`| `/api/tasks/{id}` | Delete task record |
 
-## 8. API Endpoints
-
-### Employees (`/api/employees`)
-- `GET /api/employees` — List employees (supports optional `?active=true` or `?active=false`)
-- `POST /api/employees` — Register new employee (active by default, validates unique email)
-- `GET /api/employees/{id}` — Get employee by ID
-- `PUT /api/employees/{id}` — Update name, email, or active status
-- `DELETE /api/employees/{id}` — Soft-deactivate employee (`active = false`), preserving task records
-
-### Tasks (`/api/tasks`)
-- `POST /api/tasks` — Create task with manual or auto round-robin assignment
-- `GET /api/tasks` — List tasks (newest first, supports `status`, `assignee`, `priority` filters)
-- `GET /api/tasks/pending` — **Email Automation Integration**: get all pending tasks
-- `GET /api/tasks/{id}` — Get single task details
-- `PUT /api/tasks/{id}` — Update task fields and assignee
-- `PATCH /api/tasks/{id}/status` — Advance status to `sent` or `done`
-- `DELETE /api/tasks/{id}` — Delete task
-
-### Dashboard (`/api/dashboard`)
-- `GET /api/dashboard/stats` — Live statistics (total, pending, sent, completed, active employees, and employee breakdown)
+### 3. Dashboard Analytics (`/api/dashboard`)
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/dashboard/stats` | Real-time task status counters and per-employee workload distribution |
 
 ---
 
-## 9. Backend Setup
+## 💻 Setup & Installation Guide
+
+### Prerequisites
+- Python 3.10+
+- Node.js 18+ and npm
+
+---
+
+### Backend Setup
 
 ```bash
-# Navigate to backend directory
+# 1. Open a terminal and navigate to the backend folder
 cd backend
 
-# Create virtual environment
+# 2. Create and activate a virtual environment
+# Windows (PowerShell):
 python -m venv venv
-
-# Activate virtual environment
-# Windows:
 .\venv\Scripts\Activate.ps1
-# macOS/Linux:
-source venv/bin/activate
+# macOS / Linux:
+# python3 -m venv venv
+# source venv/bin/activate
 
-# Install requirements
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# Start backend
-uvicorn app.main:app --reload --port 8000
+# 4. Start the backend server
+python -m uvicorn app.main:app --port 8000 --reload
 ```
 
-The database tables and initial employees will be automatically initialized on startup.  
-Interactive Swagger docs: **http://localhost:8000/docs**
+- Backend API: **http://localhost:8000**
+- Interactive Swagger API Documentation: **http://localhost:8000/docs**
 
 ---
 
-## 10. Frontend Setup
+### Frontend Setup
 
 ```bash
-# Navigate to frontend directory
+# 1. Open a new terminal and navigate to the frontend folder
 cd frontend
 
-# Install npm dependencies
+# 2. Install npm dependencies
 npm install
 
-# Start development server
+# 3. Run development server
 npm run dev
 ```
 
-The web dashboard runs at **http://localhost:5173**.
+- Web Application: **http://localhost:5173**
 
 ---
 
-## 11. Environment Variables
+## 🧪 Running Automated Tests
 
-### Backend (`backend/.env`)
-```env
-DATABASE_URL=sqlite:///./belvo.db
-FRONTEND_URL=http://localhost:5173
-SEED_INITIAL_EMPLOYEES=true
-```
-
-### Frontend (`frontend/.env`)
-```env
-VITE_API_URL=http://localhost:8000
-```
-
----
-
-## 12. Automated Testing
-
-Run the full pytest suite (33 tests covering all 20 scenario requirements):
+Run the full pytest suite from the `backend/` directory:
 
 ```bash
 cd backend
 .\venv\Scripts\pytest -v
 ```
 
+**Results:**
+```
+============================= test session starts =============================
+collected 35 items
+
+tests/test_assignment.py::test_round_robin_cycle_5_employees PASSED      [  2%]
+tests/test_assignment.py::test_round_robin_with_different_employee_counts PASSED [  5%]
+tests/test_assignment.py::test_round_robin_persistence_after_restart PASSED [  8%]
+tests/test_assignment.py::test_deactivated_employee_skipped PASSED       [ 11%]
+tests/test_assignment.py::test_new_employee_enters_future_round_robin PASSED [ 14%]
+tests/test_assignment.py::test_manual_assignment_does_not_advance_round_robin PASSED [ 17%]
+tests/test_assignment.py::test_no_active_employees_returns_error PASSED  [ 20%]
+tests/test_dashboard.py::test_dashboard_stats_empty PASSED               [ 22%]
+tests/test_dashboard.py::test_dashboard_stats_with_data PASSED           [ 25%]
+tests/test_employees.py::test_get_employees_empty PASSED                 [ 28%]
+tests/test_employees.py::test_create_employee PASSED                     [ 31%]
+tests/test_employees.py::test_create_duplicate_employee_email PASSED     [ 34%]
+tests/test_employees.py::test_create_employee_invalid_name_or_email PASSED [ 37%]
+tests/test_employees.py::test_get_employees_with_active_filter PASSED    [ 40%]
+tests/test_employees.py::test_get_single_employee PASSED                 [ 42%]
+tests/test_employees.py::test_get_single_employee_not_found PASSED       [ 45%]
+tests/test_employees.py::test_update_employee PASSED                     [ 48%]
+tests/test_employees.py::test_update_employee_duplicate_email PASSED     [ 51%]
+tests/test_employees.py::test_deactivate_employee PASSED                 [ 54%]
+tests/test_employees.py::test_create_and_filter_employee_department PASSED [ 57%]
+tests/test_tasks.py::test_create_task_manual_assignment PASSED           [ 60%]
+tests/test_tasks.py::test_create_task_inactive_employee PASSED           [ 62%]
+tests/test_tasks.py::test_create_task_invalid_employee PASSED            [ 65%]
+tests/test_tasks.py::test_create_task_invalid_priority PASSED            [ 68%]
+tests/test_tasks.py::test_create_task_missing_required_fields PASSED     [ 71%]
+tests/test_tasks.py::test_get_tasks_and_sorting PASSED                   [ 74%]
+tests/test_tasks.py::test_filter_tasks PASSED                            [ 77%]
+tests/test_tasks.py::test_get_pending_tasks PASSED                       [ 80%]
+tests/test_tasks.py::test_get_single_task PASSED                         [ 82%]
+tests/test_tasks.py::test_get_single_task_not_found PASSED               [ 85%]
+tests/test_tasks.py::test_update_task PASSED                             [ 88%]
+tests/test_tasks.py::test_update_task_status_and_timestamps PASSED       [ 91%]
+tests/test_tasks.py::test_update_task_status_invalid PASSED              [ 94%]
+tests/test_tasks.py::test_delete_task PASSED                             [ 97%]
+tests/test_tasks.py::test_create_task_with_department_and_round_robin PASSED [100%]
+
+======================== 35 passed in 0.85s ========================
+```
+
 ---
 
-## 13. Future Email Automation Integration Contract
+## 🤝 Hand-off Guide for the Email Automation Service
 
-The email automation service (to be built by a teammate) consumes these two backend endpoints:
+When your teammate begins building the email dispatch service:
 
 ### Step 1: Poll Pending Tasks
+The email microservice polls pending tasks:
 ```http
-GET /api/tasks/pending
+GET http://localhost:8000/api/tasks/pending
 ```
-Response:
+**Sample Response:**
 ```json
 [
   {
-    "id": 101,
-    "title": "Quarterly Financial Analysis",
-    "description": "Analyze financial metrics for Q3",
+    "id": 1,
+    "title": "Build WhatsApp Campaign Flow",
+    "description": "Set up webhook receivers and automated messaging template.",
     "priority": "High",
+    "department": "WhatsApp Marketing",
+    "status": "pending",
     "due_date": "2026-10-15",
     "assigned_to": {
-      "id": 4,
-      "name": "Pavan",
-      "email": "pavan@belvo.internal"
+      "id": 2,
+      "name": "Alex Rivera",
+      "email": "alex.rivera@belvo.internal",
+      "department": "WhatsApp Marketing"
     },
-    "status": "pending",
-    "created_at": "2026-09-24T10:15:00Z"
+    "created_at": "2026-09-25T10:00:00Z"
   }
 ]
 ```
 
-### Step 2: Update Delivery Status
-After sending the email notification to `assigned_to.email`, the email service notifies the backend:
+### Step 2: Mark Email as Dispatched
+Once the teammate's service successfully sends the email to `assigned_to.email`:
 ```http
-PATCH /api/tasks/101/status
+PATCH http://localhost:8000/api/tasks/1/status
 Content-Type: application/json
 
 {
   "status": "sent"
 }
 ```
-The backend automatically timestamps `sent_at` and updates the task status to `sent`.
+The backend automatically timestamps `sent_at` and transitions the task to `sent`.
 
-### Step 3: Employee Completion
-When the task is completed by the employee:
+### Step 3: Mark Task as Completed
+When the assignee completes the task:
 ```http
-PATCH /api/tasks/101/status
+PATCH http://localhost:8000/api/tasks/1/status
 Content-Type: application/json
 
 {
   "status": "done"
 }
 ```
-The backend automatically timestamps `completed_at` and updates the task status to `done`.
+The backend automatically timestamps `completed_at` and transitions the task to `done`.
