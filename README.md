@@ -48,17 +48,27 @@ The backend exposes clean, production-grade endpoints for the external email aut
 - [x] **Dual Viewing Modes**: Seamless toggle between an interactive **Data Table** and a visual **Kanban Board** (`Pending Delivery` → `Sent / In Progress` → `Completed`).
 - [x] **Zero Default Values Constraint**: Forms (Task Creation, Employee Registration, Priority, Due Date, Assignment Mode) start completely empty without assumptions, enforcing deliberate user input.
 - [x] **Clean Database Initialization**: No fake or hardcoded mock data seeded on startup; the application starts with zero default tasks and zero default employees.
+- [x] **Zero-Lag Optimistic UI Engine**:
+  - **Instant Task Allotment**: Submitting a task immediately renders the new task in the table and increments metrics counters with 0ms perceived latency.
+  - **Silent Background Sync**: Server data refreshes quietly in the background without unmounting the table or flashing jarring loading spinners.
+  - **Prompt Modal Lifecycle**: Modals dismiss instantaneously upon confirmation while network operations run asynchronously.
+  - **Input Memoization**: Active staff lists and departmental filters in forms are strictly memoized via `useMemo`, preventing typing lag and unnecessary re-renders.
+  - **Instant Status Transitions**: Advancing task states (pending $\rightarrow$ sent $\rightarrow$ done) updates badges with zero delay.
 - [x] **Live Task Search & Multi-Criteria Filtering**: Instant client-side search across task titles, descriptions, employee names, and emails, combined with backend filters by Status, Assignee, Priority, and Department.
-- [x] **Staff Management Directory**:
-  - Add new employees with name, unique email, and department selection / creation.
-  - Edit existing employee details, departments, and active rotation status.
-  - Soft-deactivate employees to bypass them from future rotations while strictly preserving historical task audit trails.
-  - Visual workload progress bars and per-employee task completion counters.
+- [x] **Staff Management Directory (Add & Delete)**:
+  - **Add Employee**: Register staff with full name, unique corporate email, and department assignment (predefined or custom). Includes a direct quick-add button in empty states.
+  - **Delete Employee (Permanent Cascade)**: Red `Trash2` action on both Grid and Table views with confirmation modal. Permanently removes the employee, cleans up all their assigned tasks, and resets any active round-robin pointers referencing them.
+  - **Edit Employee**: Update name, email, department, or active status on the fly.
+  - **Soft Deactivation**: Inactive toggle preserves historical records while bypassing staff from future round-robin allotments.
+  - **Workload Analytics**: Per-employee visual workload progress bars and task completion breakdown.
 - [x] **De-cluttered, Modern UI/UX**: Removed redundant corner widgets, testing simulators, and duplicate notices for a clean, distraction-free enterprise interface.
 
 ### 3. FastAPI REST Engine & Database (Backend)
 - [x] **High-Performance Asynchronous REST API**: Built with FastAPI, Pydantic v2 schemas, and strict request/response data validation.
 - [x] **SQLite Database & SQLAlchemy 2.0 ORM**: Fully relational schema with `employees`, `tasks`, and `round_robin_state` tables.
+- [x] **Complete Employee Lifecycle & Cascade Deletion**:
+  - `DELETE /api/employees/{id}?permanent=true`: Permanently deletes employee, deletes their assigned tasks, and resets round-robin state.
+  - `DELETE /api/employees/{id}?permanent=false`: Soft-deactivates employee for audit preservation.
 - [x] **Deterministic Round-Robin Algorithm**:
   - Cyclically distributes tasks across dynamic numbers of active employees ($N \ge 1$).
   - Persists rotation state directly in SQLite (`round_robin_state`), making it completely resilient across backend server restarts.
@@ -69,12 +79,12 @@ The backend exposes clean, production-grade endpoints for the external email aut
 - [x] **Real-Time Aggregations**: `/api/dashboard/stats` delivers live counts for total tasks, pending, sent, done, active employees, and workload distribution.
 
 ### 4. Automated Testing Suite
-- [x] **35 Pytest Unit & Integration Tests**: Comprehensive automated test coverage including:
+- [x] **36 Pytest Unit & Integration Tests**: Comprehensive automated test coverage including:
   - Global and per-department round-robin cycle verification.
   - Algorithm persistence across database sessions and service restarts.
   - Inactive employee bypass and dynamic employee entry into future rounds.
   - Task creation, validation, filtering, status transitions, and deletion.
-  - Employee uniqueness validation, updates, and soft-deactivation.
+  - Employee uniqueness validation, updates, soft-deactivation, and permanent cascade deletion.
 
 ---
 
@@ -161,6 +171,7 @@ erDiagram
 | `GET` | `/api/employees/{id}` | Retrieve single employee details by ID |
 | `PUT` | `/api/employees/{id}` | Update employee name, email, department, or active status |
 | `DELETE`| `/api/employees/{id}` | Soft-deactivate employee (`active = false`), preserving task records |
+| `DELETE`| `/api/employees/{id}?permanent=true` | Permanently delete employee from database, delete assigned tasks, and reset round-robin state |
 
 ### 2. Tasks (`/api/tasks`)
 | Method | Endpoint | Description |
@@ -263,25 +274,26 @@ tests/test_employees.py::test_get_single_employee PASSED                 [ 42%]
 tests/test_employees.py::test_get_single_employee_not_found PASSED       [ 45%]
 tests/test_employees.py::test_update_employee PASSED                     [ 48%]
 tests/test_employees.py::test_update_employee_duplicate_email PASSED     [ 51%]
-tests/test_employees.py::test_deactivate_employee PASSED                 [ 54%]
-tests/test_employees.py::test_create_and_filter_employee_department PASSED [ 57%]
-tests/test_tasks.py::test_create_task_manual_assignment PASSED           [ 60%]
-tests/test_tasks.py::test_create_task_inactive_employee PASSED           [ 62%]
-tests/test_tasks.py::test_create_task_invalid_employee PASSED            [ 65%]
-tests/test_tasks.py::test_create_task_invalid_priority PASSED            [ 68%]
-tests/test_tasks.py::test_create_task_missing_required_fields PASSED     [ 71%]
-tests/test_tasks.py::test_get_tasks_and_sorting PASSED                   [ 74%]
+tests/test_employees.py::test_deactivate_employee PASSED                 [ 52%]
+tests/test_employees.py::test_create_and_filter_employee_department PASSED [ 55%]
+tests/test_employees.py::test_delete_employee_permanent PASSED           [ 58%]
+tests/test_tasks.py::test_create_task_manual_assignment PASSED           [ 61%]
+tests/test_tasks.py::test_create_task_inactive_employee PASSED           [ 63%]
+tests/test_tasks.py::test_create_task_invalid_employee PASSED            [ 66%]
+tests/test_tasks.py::test_create_task_invalid_priority PASSED            [ 69%]
+tests/test_tasks.py::test_create_task_missing_required_fields PASSED     [ 72%]
+tests/test_tasks.py::test_get_tasks_and_sorting PASSED                   [ 75%]
 tests/test_tasks.py::test_filter_tasks PASSED                            [ 77%]
 tests/test_tasks.py::test_get_pending_tasks PASSED                       [ 80%]
-tests/test_tasks.py::test_get_single_task PASSED                         [ 82%]
-tests/test_tasks.py::test_get_single_task_not_found PASSED               [ 85%]
+tests/test_tasks.py::test_get_single_task PASSED                         [ 83%]
+tests/test_tasks.py::test_get_single_task_not_found PASSED               [ 86%]
 tests/test_tasks.py::test_update_task PASSED                             [ 88%]
 tests/test_tasks.py::test_update_task_status_and_timestamps PASSED       [ 91%]
 tests/test_tasks.py::test_update_task_status_invalid PASSED              [ 94%]
 tests/test_tasks.py::test_delete_task PASSED                             [ 97%]
 tests/test_tasks.py::test_create_task_with_department_and_round_robin PASSED [100%]
 
-======================== 35 passed in 0.85s ========================
+======================== 36 passed in 0.64s ========================
 ```
 
 ---
