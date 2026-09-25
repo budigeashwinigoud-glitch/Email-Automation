@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Employee
+from ..models import Employee, Task, RoundRobinState
 from ..schemas import EmployeeCreate, EmployeeUpdate, EmployeeResponse
 
 router = APIRouter(prefix="/api/employees", tags=["Employees"])
@@ -117,10 +117,14 @@ def update_employee(
 @router.delete("/{employee_id}")
 def delete_or_deactivate_employee(
     employee_id: int,
+    permanent: bool = Query(False, description="Set to true to permanently delete employee and associated tasks"),
     db: Session = Depends(get_db)
 ):
     """
-    Soft-deactivates an employee (active = false) to preserve historical task records.
+    Delete or deactivate an employee.
+    - If permanent=True: permanently removes the employee from the database, deletes their assigned tasks,
+      and cleans up any round-robin state referencing them.
+    - If permanent=False: soft-deactivates the employee (active = false) to preserve historical task records.
     """
     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     if not employee:
@@ -129,10 +133,26 @@ def delete_or_deactivate_employee(
             detail="Employee not found."
         )
 
-    employee.active = False
-    db.commit()
-    return {
-        "message": "Employee deactivated successfully.",
-        "id": employee.id,
-        "active": False
-    }
+    if permanent:
+        # Reset last_assigned_employee_id in round_robin_state if referencing this employee
+        db.query(RoundRobinState).filter(RoundRobinState.last_assigned_employee_id == employee_id).update(
+            {"last_assigned_employee_id": None}
+        )
+        # Delete associated tasks
+        db.query(Task).filter(Task.assigned_to == employee_id).delete()
+        # Delete the employee
+        db.delete(employee)
+        db.commit()
+        return {
+            "message": "Employee and associated tasks deleted successfully.",
+            "id": employee_id,
+            "deleted": True
+        }
+    else:
+        employee.active = False
+        db.commit()
+        return {
+            "message": "Employee deactivated successfully.",
+            "id": employee.id,
+            "active": False
+        }

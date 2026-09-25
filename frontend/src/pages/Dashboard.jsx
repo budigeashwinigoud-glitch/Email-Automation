@@ -37,9 +37,9 @@ export default function Dashboard({
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
 
-  const loadDashboardData = useCallback(async () => {
+  const loadDashboardData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [statsData, tasksData, employeesData] = await Promise.all([
         api.getDashboardStats(),
         api.getTasks({
@@ -57,7 +57,7 @@ export default function Dashboard({
     } catch (err) {
       showToast('error', 'Error Loading Dashboard', err.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [statusFilter, assigneeFilter, priorityFilter, departmentFilter, showToast]);
 
@@ -79,46 +79,94 @@ export default function Dashboard({
   }, [tasks, searchQuery]);
 
   const handleTaskCreated = (newTask) => {
+    // 1. Optimistic instant addition to tasks state (0ms lag!)
+    setTasks((prev) => {
+      if (prev.some((t) => t.id === newTask.id)) return prev;
+      return [newTask, ...prev];
+    });
+
+    // 2. Optimistic instant increment of stats counters
+    setStats((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        total_tasks: (prev.total_tasks || 0) + 1,
+        pending_tasks: (prev.pending_tasks || 0) + 1,
+      };
+    });
+
+    // 3. User toast notification
     showToast(
       'success',
       'Task Successfully Allotted',
       `Assigned to ${newTask.assigned_to?.name || 'staff'} (${newTask.assigned_to?.email || ''}) with status 'pending'.`
     );
-    loadDashboardData();
+
+    // 4. Silent background sync without unmounting table or showing loading spinners
+    loadDashboardData(true);
   };
 
   const handleTaskUpdated = (updatedTask) => {
+    // Optimistic update
+    setTasks((prev) =>
+      prev.map((t) => (t.id === updatedTask.id ? updatedTask : t))
+    );
     showToast('success', 'Task Updated', `Task #${updatedTask.id} changes were saved.`);
-    loadDashboardData();
+    loadDashboardData(true);
     if (selectedTask && selectedTask.id === updatedTask.id) {
       setSelectedTask(updatedTask);
     }
   };
 
   const handleQuickStatusChange = async (taskId, newStatus) => {
+    // Optimistic status advance (instant badge transition)
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
+    );
+    showToast(
+      'success',
+      'Status Advanced',
+      `Task #${taskId} is now '${newStatus}'.`
+    );
+
     try {
-      const updated = await api.updateTaskStatus(taskId, newStatus);
-      showToast(
-        'success',
-        'Status Advanced',
-        `Task #${taskId} is now '${newStatus}'.`
-      );
-      loadDashboardData();
+      await api.updateTaskStatus(taskId, newStatus);
+      loadDashboardData(true);
     } catch (err) {
       showToast('error', 'Status Update Failed', err.message);
+      loadDashboardData(true);
     }
   };
 
   const handleDeleteConfirm = async () => {
     if (!taskToDelete) return;
+    const target = taskToDelete;
+    setIsDeleteOpen(false);
+    setTaskToDelete(null);
+
+    // Optimistic removal for zero-latency UI
+    setTasks((prev) => prev.filter((t) => t.id !== target.id));
+    setStats((prev) => {
+      if (!prev) return prev;
+      const decPending = target.status === 'pending' ? 1 : 0;
+      const decSent = target.status === 'sent' ? 1 : 0;
+      const decDone = target.status === 'done' ? 1 : 0;
+      return {
+        ...prev,
+        total_tasks: Math.max(0, (prev.total_tasks || 0) - 1),
+        pending_tasks: Math.max(0, (prev.pending_tasks || 0) - decPending),
+        sent_tasks: Math.max(0, (prev.sent_tasks || 0) - decSent),
+        completed_tasks: Math.max(0, (prev.completed_tasks || 0) - decDone),
+      };
+    });
+
     try {
-      await api.deleteTask(taskToDelete.id);
-      showToast('success', 'Task Deleted', `Task #${taskToDelete.id} was permanently removed.`);
-      setIsDeleteOpen(false);
-      setTaskToDelete(null);
-      loadDashboardData();
+      await api.deleteTask(target.id);
+      showToast('success', 'Task Deleted', `Task #${target.id} was permanently removed.`);
+      loadDashboardData(true);
     } catch (err) {
       showToast('error', 'Deletion Failed', err.message);
+      loadDashboardData();
     }
   };
 

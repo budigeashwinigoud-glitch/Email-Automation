@@ -80,7 +80,12 @@ export const api = {
     }),
 
   deactivateEmployee: (employeeId) =>
-    request(`/api/employees/${employeeId}`, {
+    request(`/api/employees/${employeeId}?permanent=false`, {
+      method: 'DELETE',
+    }),
+
+  deleteEmployee: (employeeId, permanent = true) =>
+    request(`/api/employees/${employeeId}?permanent=${permanent}`, {
       method: 'DELETE',
     }),
 

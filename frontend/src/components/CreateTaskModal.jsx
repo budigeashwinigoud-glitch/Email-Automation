@@ -15,7 +15,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const activeEmployees = employees.filter((e) => e.active);
+  const activeEmployees = useMemo(() => employees.filter((e) => e.active), [employees]);
 
   // Compute final effective department
   const effectiveDepartment = deptSelect === 'Other' ? customDept.trim() : deptSelect.trim();
@@ -100,7 +100,11 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
 
       const createdTask = await api.createTask(payload);
 
-      // Reset form
+      // Instant UI response: close modal and push task to parent state
+      onClose();
+      onSuccess(createdTask);
+
+      // Reset form fields
       setTitle('');
       setDescription('');
       setDeptSelect('');
@@ -109,9 +113,6 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
       setDueDate('');
       setAssignmentMode('');
       setManualAssignee('');
-
-      onSuccess(createdTask);
-      onClose();
     } catch (err) {
       setError(err.message || 'Failed to create task.');
     } finally {

@@ -127,3 +127,30 @@ def test_create_and_filter_employee_department(client):
     assert update_res.status_code == 200
     assert update_res.json()["department"] == "AI/ML Department"
 
+
+def test_delete_employee_permanent(client, seed_employees):
+    emp_id = seed_employees[3].id
+    # Create a task assigned to this employee first
+    task_res = client.post("/api/tasks", json={
+        "title": "Task for deletion test",
+        "description": "Will be deleted",
+        "priority": "Medium",
+        "due_date": "2026-10-01",
+        "assignee": emp_id
+    })
+    assert task_res.status_code == 201
+    task_id = task_res.json()["id"]
+
+    # Permanently delete employee
+    del_res = client.delete(f"/api/employees/{emp_id}?permanent=true")
+    assert del_res.status_code == 200
+    assert del_res.json()["deleted"] is True
+
+    # Verify employee no longer exists
+    get_emp = client.get(f"/api/employees/{emp_id}")
+    assert get_emp.status_code == 404
+
+    # Verify associated task was also deleted
+    get_task = client.get(f"/api/tasks/{task_id}")
+    assert get_task.status_code == 404
+

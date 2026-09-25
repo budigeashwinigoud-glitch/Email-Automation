@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Users, UserPlus, Edit2, UserX, AlertCircle, X, CheckCircle2, Search, List, LayoutGrid, Plus, Sparkles, Building2 } from 'lucide-react';
+import { Users, UserPlus, Edit2, UserX, Trash2, AlertCircle, X, CheckCircle2, Search, List, LayoutGrid, Plus, Sparkles, Building2 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { api } from '../services/api';
 import { getAvatarColor, getInitials } from '../utils/colors';
@@ -21,6 +21,10 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
   const [deactivatingEmployee, setDeactivatingEmployee] = useState(null);
   const [isDeactivateOpen, setIsDeactivateOpen] = useState(false);
 
+  // Delete Modal State
+  const [deletingEmployee, setDeletingEmployee] = useState(null);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
   // Add Employee Form State
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -41,9 +45,9 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
   // Department filter
   const [departmentFilter, setDepartmentFilter] = useState('All');
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       let filterParam = null;
       if (activeFilter === 'active') filterParam = true;
       if (activeFilter === 'inactive') filterParam = false;
@@ -58,7 +62,7 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
     } catch (err) {
       showToast('error', 'Failed to Load Employees', err.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [activeFilter, departmentFilter, showToast]);
 
@@ -125,6 +129,8 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
         email: newEmail.trim(),
         department: effectiveDept || null,
       });
+      // Optimistic update
+      setEmployees((prev) => [...prev, created]);
       showToast(
         'success',
         'Employee Registered',
@@ -135,7 +141,7 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
       setNewDepartment('');
       setNewCustomDepartment('');
       setIsCreateOpen(false);
-      loadData();
+      loadData(true);
     } catch (err) {
       setAddError(err.message || 'Failed to create employee.');
     } finally {
@@ -199,18 +205,49 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
 
   const handleConfirmDeactivate = async () => {
     if (!deactivatingEmployee) return;
+    const target = deactivatingEmployee;
+    setIsDeactivateOpen(false);
+    setDeactivatingEmployee(null);
+
+    // Optimistic update
+    setEmployees((prev) =>
+      prev.map((e) => (e.id === target.id ? { ...e, active: false } : e))
+    );
+
     try {
-      await api.deactivateEmployee(deactivatingEmployee.id);
+      await api.deactivateEmployee(target.id);
       showToast(
         'success',
         'Employee Deactivated',
-        `${deactivatingEmployee.name} is now inactive and will be bypassed in future task allotments.`
+        `${target.name} is now inactive and will be bypassed in future task allotments.`
       );
-      setIsDeactivateOpen(false);
-      setDeactivatingEmployee(null);
-      loadData();
+      loadData(true);
     } catch (err) {
       showToast('error', 'Deactivation Failed', err.message);
+      loadData();
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingEmployee) return;
+    const target = deletingEmployee;
+    setIsDeleteOpen(false);
+    setDeletingEmployee(null);
+
+    // Optimistic removal for instant UI response
+    setEmployees((prev) => prev.filter((e) => e.id !== target.id));
+
+    try {
+      await api.deleteEmployee(target.id, true);
+      showToast(
+        'success',
+        'Employee Deleted',
+        `${target.name} has been permanently removed from the system.`
+      );
+      loadData(true);
+    } catch (err) {
+      showToast('error', 'Deletion Failed', err.message);
+      loadData();
     }
   };
 
@@ -323,9 +360,13 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
               <Users size={30} />
             </div>
             <div className="empty-state-title">No employees found</div>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
               No employee matches your search criteria. Add a new employee to get started.
             </p>
+            <button className="btn btn-primary btn-sm" onClick={() => setIsCreateOpen(true)}>
+              <UserPlus size={14} />
+              <span>Register New Employee</span>
+            </button>
           </div>
         ) : viewMode === 'grid' ? (
           /* Grid Cards View */
@@ -454,6 +495,17 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                           <UserX size={14} />
                         </button>
                       )}
+                      <button
+                        className="btn-icon"
+                        onClick={() => {
+                          setDeletingEmployee(emp);
+                          setIsDeleteOpen(true);
+                        }}
+                        title="Delete Employee"
+                        style={{ color: 'var(--high-dot)' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -554,6 +606,17 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                               <UserX size={15} />
                             </button>
                           )}
+                          <button
+                            className="btn-icon"
+                            onClick={() => {
+                              setDeletingEmployee(emp);
+                              setIsDeleteOpen(true);
+                            }}
+                            title="Delete Employee"
+                            style={{ color: 'var(--high-dot)' }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -790,6 +853,24 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
         onCancel={() => {
           setIsDeactivateOpen(false);
           setDeactivatingEmployee(null);
+        }}
+        isDanger={true}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isDeleteOpen}
+        title="Delete Employee Permanently"
+        message={
+          deletingEmployee
+            ? `Are you sure you want to permanently delete ${deletingEmployee.name} (${deletingEmployee.email})? This action cannot be undone and will remove them and any tasks assigned to them.`
+            : ''
+        }
+        confirmText="Delete Employee"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
+          setIsDeleteOpen(false);
+          setDeletingEmployee(null);
         }}
         isDanger={true}
       />
