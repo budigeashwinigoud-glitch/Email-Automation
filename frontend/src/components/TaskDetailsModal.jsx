@@ -3,7 +3,7 @@ import { X, Calendar, User, Mail, Clock, Send, CheckCircle2, AlertCircle, Edit2 
 import { api } from '../services/api';
 import { getAvatarColor, getInitials } from '../utils/colors';
 
-export default function TaskDetailsModal({ isOpen, task, onClose, onStatusUpdated, onOpenEdit }) {
+export default function TaskDetailsModal({ isOpen, task, onClose, onStatusUpdated, onOpenEdit, onSendEmail }) {
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState('');
 
@@ -54,7 +54,7 @@ export default function TaskDetailsModal({ isOpen, task, onClose, onStatusUpdate
           </button>
         </div>
 
-        <div className="modal-body">
+        <div className="modal-body custom-scrollbar">
           {error && (
             <div className="alert alert-danger">
               <AlertCircle size={16} />
@@ -220,15 +220,18 @@ export default function TaskDetailsModal({ isOpen, task, onClose, onStatusUpdate
         <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
           {/* Quick status actions */}
           <div style={{ display: 'flex', gap: '8px' }}>
-            {task.status === 'pending' && (
+            {task.status === 'pending' && onSendEmail && (
               <button
-                className="btn btn-indigo btn-sm"
-                onClick={() => handleQuickStatusChange('sent')}
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  onClose();
+                  onSendEmail(task);
+                }}
                 disabled={updating}
-                title="Simulate future email service dispatching this task"
+                title={`Send task email to ${task.assigned_to?.name || 'employee'}`}
               >
-                <Send size={13} />
-                <span>Simulate Email Dispatch</span>
+                <Mail size={13} />
+                <span>Send Email</span>
               </button>
             )}
             {task.status === 'sent' && (

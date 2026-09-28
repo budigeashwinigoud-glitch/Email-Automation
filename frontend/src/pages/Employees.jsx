@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Users, UserPlus, Edit2, UserX, Trash2, AlertCircle, X, CheckCircle2, Search, List, LayoutGrid, Plus, Sparkles, Building2 } from 'lucide-react';
+import { Users, UserPlus, Edit2, UserX, Trash2, AlertCircle, X, CheckCircle2, Search, List, LayoutGrid, Plus, Sparkles, Building2, RotateCcw } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { api } from '../services/api';
 import { getAvatarColor, getInitials } from '../utils/colors';
@@ -280,10 +280,20 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
               <input
                 type="text"
                 className="search-input"
-                placeholder="Search staff by name or email..."
+                placeholder="Search staff by name, email, or department..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="search-clear-btn"
+                  onClick={() => setSearchQuery('')}
+                  title="Clear search"
+                >
+                  <X size={13} />
+                </button>
+              )}
             </div>
 
             {/* Active Status Filter */}
@@ -298,13 +308,13 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                 className={`filter-pill ${activeFilter === 'active' ? 'active' : ''}`}
                 onClick={() => setActiveFilter('active')}
               >
-                Active
+                Active ({employees.filter((e) => e.active).length})
               </button>
               <button
                 className={`filter-pill ${activeFilter === 'inactive' ? 'active' : ''}`}
                 onClick={() => setActiveFilter('inactive')}
               >
-                Inactive
+                Inactive ({employees.filter((e) => !e.active).length})
               </button>
             </div>
 
@@ -342,10 +352,21 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
               </button>
             </div>
 
-            <button className="btn btn-primary btn-sm" onClick={() => setIsCreateOpen(true)}>
-              <UserPlus size={14} />
-              <span>Add Employee</span>
-            </button>
+            {/* Reset Filters */}
+            {(activeFilter !== 'all' || departmentFilter !== 'All' || searchQuery) && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setActiveFilter('all');
+                  setDepartmentFilter('All');
+                  setSearchQuery('');
+                }}
+                title="Reset filters"
+              >
+                <RotateCcw size={13} />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -643,8 +664,8 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleCreateEmployee}>
-              <div className="modal-body">
+            <form className="modal-form" onSubmit={handleCreateEmployee}>
+              <div className="modal-body custom-scrollbar">
                 {addError && (
                   <div className="alert alert-danger">
                     <AlertCircle size={16} />
@@ -747,8 +768,8 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleUpdateEmployee}>
-              <div className="modal-body">
+            <form className="modal-form" onSubmit={handleUpdateEmployee}>
+              <div className="modal-body custom-scrollbar">
                 {editError && (
                   <div className="alert alert-danger">
                     <AlertCircle size={16} />

@@ -137,6 +137,11 @@ export const api = {
       method: 'DELETE',
     }),
 
+  sendTaskEmail: (taskId) =>
+    request(`/api/tasks/${taskId}/send`, {
+      method: 'POST',
+    }),
+
   // --------------------------------------------------------------------------
   // Dashboard API
   // --------------------------------------------------------------------------

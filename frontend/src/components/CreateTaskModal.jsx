@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Sparkles, User, AlertCircle, Building2 } from 'lucide-react';
+import { X, Sparkles, User, AlertCircle, Building2, Send, Save, Calendar, CheckCircle2, Clock } from 'lucide-react';
 import { api } from '../services/api';
 import { PREDEFINED_DEPARTMENTS } from '../constants/departments';
 
 export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees = [] }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [deptSelect, setDeptSelect] = useState(''); // Selected from dropdown (or empty)
-  const [customDept, setCustomDept] = useState(''); // Typed when 'Other' selected
-  const [priority, setPriority] = useState(''); // No default value
-  const [dueDate, setDueDate] = useState(''); // No default value
-  const [assignmentMode, setAssignmentMode] = useState(''); // No default value: user must explicitly choose 'auto' or 'manual'
-  const [manualAssignee, setManualAssignee] = useState(''); // No default value
-  const [loading, setLoading] = useState(false);
+  const [deptSelect, setDeptSelect] = useState('');
+  const [customDept, setCustomDept] = useState('');
+  const [priority, setPriority] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [assignmentMode, setAssignmentMode] = useState('');
+  const [manualAssignee, setManualAssignee] = useState('');
+  
+  // Loading states for both buttons
+  const [submittingAction, setSubmittingAction] = useState(null); // 'save' | 'send' | null
   const [error, setError] = useState('');
 
   const activeEmployees = useMemo(() => employees.filter((e) => e.active), [employees]);
@@ -51,43 +53,48 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
       setAssignmentMode('');
       setManualAssignee('');
       setError('');
+      setSubmittingAction(null);
     }
   }, [isOpen]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-
+  const validateForm = () => {
     if (!title.trim()) {
       setError('Task title is required.');
-      return;
+      return false;
     }
     if (!description.trim()) {
-      setError('Task description is required.');
-      return;
+      setError('Task description and instructions are required.');
+      return false;
     }
     if (deptSelect === 'Other' && !customDept.trim()) {
       setError('Please specify the custom department name or choose an existing department.');
-      return;
+      return false;
     }
     if (!priority) {
       setError('Please select a priority level (Low, Medium, or High).');
-      return;
+      return false;
     }
     if (!dueDate) {
       setError('Please select a due date.');
-      return;
+      return false;
     }
     if (!assignmentMode) {
-      setError('Please select an assignment strategy: Auto Round-Robin or Manual.');
-      return;
+      setError('Please select an assignment strategy: Auto Round-Robin or Manual Selection.');
+      return false;
     }
     if (assignmentMode === 'manual' && !manualAssignee) {
       setError('Please select an employee for manual assignment.');
-      return;
+      return false;
     }
+    return true;
+  };
 
-    setLoading(true);
+  const handleAllot = async (shouldSendEmail = false) => {
+    setError('');
+    if (!validateForm()) return;
+
+    setSubmittingAction(shouldSendEmail ? 'send' : 'save');
+
     try {
       const payload = {
         title: title.trim(),
@@ -98,25 +105,29 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
         assignee: assignmentMode === 'auto' ? 'auto' : parseInt(manualAssignee, 10),
       };
 
+      // 1. Create and allot task in database
       const createdTask = await api.createTask(payload);
 
-      // Instant UI response: close modal and push task to parent state
-      onClose();
-      onSuccess(createdTask);
-
-      // Reset form fields
-      setTitle('');
-      setDescription('');
-      setDeptSelect('');
-      setCustomDept('');
-      setPriority('');
-      setDueDate('');
-      setAssignmentMode('');
-      setManualAssignee('');
+      // 2. If user chose "Allot & Send Email Now", attempt immediate dispatch
+      if (shouldSendEmail) {
+        try {
+          const sentTask = await api.sendTaskEmail(createdTask.id);
+          onClose();
+          onSuccess(sentTask, true);
+        } catch (sendErr) {
+          // If email fails (e.g. SMTP credentials not set), task remains pending
+          onClose();
+          onSuccess(createdTask, false, sendErr.message);
+        }
+      } else {
+        // Normal save as pending
+        onClose();
+        onSuccess(createdTask, false);
+      }
     } catch (err) {
-      setError(err.message || 'Failed to create task.');
+      setError(err.message || 'Failed to create and allot task.');
     } finally {
-      setLoading(false);
+      setSubmittingAction(null);
     }
   };
 
@@ -124,153 +135,161 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
+        {/* Modal Header */}
         <div className="modal-header">
-          <div>
+          <div className="modal-header-info">
+            <div className="modal-badge-chip">
+              <Sparkles size={13} />
+              <span>Task Intake Engine</span>
+            </div>
             <h2 className="modal-title">Create & Allot Task</h2>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Intake new task into the automated email dispatch pipeline
+            <div className="modal-subtitle">
+              Assign task via departmental round-robin and choose to save as pending or dispatch email immediately
             </div>
           </div>
-          <button className="btn-icon" onClick={onClose} aria-label="Close">
+          <button className="btn-icon modal-close-btn" onClick={onClose} aria-label="Close modal">
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body">
+        {/* Form with Flex Layout for Smooth Scrolling */}
+        <div className="modal-form">
+          <div className="modal-body custom-scrollbar">
             {error && (
-              <div className="alert alert-danger">
-                <AlertCircle size={16} />
+              <div className="alert alert-danger" style={{ animation: 'shake 0.3s ease' }}>
+                <AlertCircle size={17} style={{ flexShrink: 0 }} />
                 <span>{error}</span>
               </div>
             )}
 
             {activeEmployees.length === 0 && (
-              <div className="alert alert-danger" style={{ background: '#fffbeb', borderColor: '#fef3c7', color: '#b45309' }}>
-                <AlertCircle size={16} />
-                <span>No active employees registered yet. Please add an employee first before creating tasks.</span>
+              <div className="alert alert-warning">
+                <AlertCircle size={17} style={{ flexShrink: 0 }} />
+                <span>No active employees registered yet. Please add staff in the Employee Directory before creating tasks.</span>
               </div>
             )}
 
             {/* Department Selection */}
             <div className="form-group">
-              <label className="form-label">
-                Department
-              </label>
-              <select
-                className="form-select"
-                value={deptSelect}
-                onChange={(e) => {
-                  setDeptSelect(e.target.value);
-                  setManualAssignee(''); // Reset assignee so user selects from filtered list
-                }}
-              >
-                <option value="">-- All Departments / General --</option>
-                {allDepartmentsList.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-                <option value="Other">Other (Create New Department)</option>
-              </select>
-              <div className="form-help">
-                Tasks are allotted based on department. Selecting a department filters employees and targets departmental round-robin rotation.
+              <div className="form-label-row">
+                <label className="form-label">
+                  Target Department
+                </label>
+                <span className="form-optional-tag">Optional / Auto-Filter</span>
+              </div>
+              <div className="input-with-icon-wrapper">
+                <Building2 size={16} className="input-lead-icon" />
+                <select
+                  className="form-select form-input-with-icon"
+                  value={deptSelect}
+                  onChange={(e) => {
+                    setDeptSelect(e.target.value);
+                    setManualAssignee('');
+                  }}
+                >
+                  <option value="">-- All Departments / Organization Wide --</option>
+                  {allDepartmentsList.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                  <option value="Other">✨ Other (Create New Department...)</option>
+                </select>
               </div>
 
               {deptSelect === 'Other' && (
-                <div style={{ marginTop: '8px' }}>
+                <div style={{ marginTop: '10px', animation: 'fadeIn 0.2s ease' }}>
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="Enter new department name..."
+                    placeholder="Type new department name (e.g. Mobile Apps, DevOps, Finance)..."
                     value={customDept}
                     onChange={(e) => {
                       setCustomDept(e.target.value);
                       setManualAssignee('');
                     }}
+                    autoFocus
                     required
                   />
                 </div>
               )}
+              <div className="form-help">
+                Selecting a department isolates the round-robin rotation pool strictly to staff in that department.
+              </div>
             </div>
 
-            {/* Assignment Method Segmented Switcher (No default value - user must explicitly pick) */}
+            {/* Assignment Method Switcher */}
             <div className="form-group">
               <label className="form-label">
                 Assignment Strategy <span className="required">*</span>
               </label>
-              <div className="assignment-tabs">
-                <button
-                  type="button"
-                  className={`assignment-tab ${assignmentMode === 'auto' ? 'active' : ''}`}
+              <div className="assignment-cards-grid">
+                <div
+                  className={`assignment-card ${assignmentMode === 'auto' ? 'selected' : ''}`}
                   onClick={() => {
                     setAssignmentMode('auto');
                     setError('');
                   }}
                 >
-                  <Sparkles size={14} />
-                  <span>Auto Round-Robin</span>
-                </button>
-                <button
-                  type="button"
-                  className={`assignment-tab ${assignmentMode === 'manual' ? 'active' : ''}`}
+                  <div className="assignment-card-icon auto-icon">
+                    <Sparkles size={18} />
+                  </div>
+                  <div className="assignment-card-content">
+                    <div className="assignment-card-title">Auto Round-Robin</div>
+                    <div className="assignment-card-desc">
+                      Cyclically assigns to the next active employee in sequence.
+                    </div>
+                  </div>
+                  <div className="assignment-card-radio">
+                    <div className="radio-inner" />
+                  </div>
+                </div>
+
+                <div
+                  className={`assignment-card ${assignmentMode === 'manual' ? 'selected' : ''}`}
                   onClick={() => {
                     setAssignmentMode('manual');
                     setError('');
                   }}
                 >
-                  <User size={14} />
-                  <span>Manual Selection</span>
-                </button>
+                  <div className="assignment-card-icon manual-icon">
+                    <User size={18} />
+                  </div>
+                  <div className="assignment-card-content">
+                    <div className="assignment-card-title">Manual Selection</div>
+                    <div className="assignment-card-desc">
+                      Assign directly to a specific team member of your choice.
+                    </div>
+                  </div>
+                  <div className="assignment-card-radio">
+                    <div className="radio-inner" />
+                  </div>
+                </div>
               </div>
 
-              {!assignmentMode && (
-                <div className="form-help" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  Please choose an assignment method above.
-                </div>
-              )}
-
               {assignmentMode === 'auto' && (
-                <div
-                  style={{
-                    background: '#eff6ff',
-                    border: '1px solid #bfdbfe',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '12px 14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    fontSize: '12.5px',
-                    color: '#1e40af',
-                  }}
-                >
-                  <Sparkles size={18} color="var(--primary)" style={{ flexShrink: 0 }} />
+                <div className="strategy-info-banner auto-banner">
+                  <Sparkles size={16} color="var(--primary)" style={{ flexShrink: 0 }} />
                   <div>
-                    <strong>Deterministic Cyclic Assignment:</strong> The task will be allotted to the next active employee in{' '}
-                    {effectiveDepartment ? <strong>department "{effectiveDepartment}"</strong> : 'rotation'} and stored with status <code>pending</code>.
+                    <strong>Cyclic Rotation Active:</strong> The task will be assigned to the next eligible employee{' '}
+                    {effectiveDepartment ? <span>in <strong>"{effectiveDepartment}"</strong></span> : 'in the company rotation'}.
                   </div>
                 </div>
               )}
 
               {assignmentMode === 'manual' && (
-                <div>
-                  <label className="form-label" style={{ marginTop: '10px' }}>
-                    Select Employee {effectiveDepartment ? `in ${effectiveDepartment}` : ''} <span className="required">*</span>
-                  </label>
+                <div className="manual-assignee-box">
+                  <div className="form-label-row">
+                    <label className="form-label">
+                      Select Assignee {effectiveDepartment ? `(${effectiveDepartment})` : ''} <span className="required">*</span>
+                    </label>
+                    <span className="count-chip">{filteredEmployeesForManual.length} Available</span>
+                  </div>
 
                   {filteredEmployeesForManual.length === 0 ? (
-                    <div
-                      style={{
-                        padding: '10px 12px',
-                        background: '#fef2f2',
-                        border: '1px solid #fecaca',
-                        borderRadius: 'var(--radius-md)',
-                        fontSize: '12.5px',
-                        color: '#991b1b',
-                      }}
-                    >
-                      No active employees found in department <strong>"{effectiveDepartment}"</strong>. Please register an employee in this department or select another department.
+                    <div className="alert alert-danger" style={{ margin: '6px 0 0 0' }}>
+                      No active staff found in <strong>"{effectiveDepartment || 'General'}"</strong>. Please register an employee or change department.
                     </div>
                   ) : (
                     <select
@@ -279,7 +298,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
                       onChange={(e) => setManualAssignee(e.target.value)}
                       required
                     >
-                      <option value="">-- Choose Employee ({filteredEmployeesForManual.length} available) --</option>
+                      <option value="">-- Choose Employee Assignee --</option>
                       {filteredEmployeesForManual.map((emp) => (
                         <option key={emp.id} value={emp.id}>
                           {emp.name} — {emp.email} {emp.department ? `[${emp.department}]` : ''}
@@ -287,14 +306,11 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
                       ))}
                     </select>
                   )}
-                  <div className="form-help">
-                    Manual allotment assigns directly and preserves the round-robin pointer.
-                  </div>
                 </div>
               )}
             </div>
 
-            {/* Title */}
+            {/* Task Title */}
             <div className="form-group">
               <label className="form-label">
                 Task Title <span className="required">*</span>
@@ -302,7 +318,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
               <input
                 type="text"
                 className="form-input"
-                placeholder="Enter task title"
+                placeholder="e.g. Build WhatsApp Automation Webhook, Update UI Components"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
@@ -317,86 +333,133 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
               <textarea
                 className="form-textarea"
                 rows={3}
-                placeholder="Enter task description, requirements, and deliverables"
+                placeholder="Provide clear instructions, deliverables, requirements, and reference links for the assignee..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 required
               />
             </div>
 
-            {/* Priority Selector (Visual Tiles - No default selected) */}
-            <div className="form-group">
-              <label className="form-label">
-                Priority Level <span className="required">*</span>
-              </label>
-              <div className="priority-tiles">
-                {['Low', 'Medium', 'High'].map((p) => (
-                  <div
-                    key={p}
-                    className={`priority-tile ${priority === p ? `selected-${p}` : ''}`}
-                    onClick={() => {
-                      setPriority(p);
-                      setError('');
-                    }}
-                  >
-                    <span
-                      className="badge-dot"
-                      style={{
-                        background:
-                          p === 'High'
-                            ? 'var(--high-dot)'
-                            : p === 'Medium'
-                            ? 'var(--medium-dot)'
-                            : 'var(--low-dot)',
-                        width: '8px',
-                        height: '8px',
+            {/* Priority & Due Date in a 2-Column Row */}
+            <div className="form-row-2col">
+              {/* Priority */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">
+                  Priority Level <span className="required">*</span>
+                </label>
+                <div className="priority-tiles">
+                  {[
+                    { key: 'Low', label: 'Low', color: 'var(--low-dot)' },
+                    { key: 'Medium', label: 'Medium', color: 'var(--medium-dot)' },
+                    { key: 'High', label: 'High', color: 'var(--high-dot)' },
+                  ].map((item) => (
+                    <button
+                      type="button"
+                      key={item.key}
+                      className={`priority-tile ${priority === item.key ? `selected-${item.key}` : ''}`}
+                      onClick={() => {
+                        setPriority(item.key);
+                        setError('');
                       }}
-                    ></span>
-                    <span>{p}</span>
-                  </div>
-                ))}
-              </div>
-              {!priority && (
-                <div className="form-help" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  Please select a priority level.
+                    >
+                      <span className="badge-dot" style={{ background: item.color }}></span>
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
+
+              {/* Due Date */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">
+                  Due Date <span className="required">*</span>
+                </label>
+                <div className="input-with-icon-wrapper">
+                  <Calendar size={16} className="input-lead-icon" />
+                  <input
+                    type="date"
+                    className="form-input form-input-with-icon"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Due Date (No default value) */}
-            <div className="form-group">
-              <label className="form-label">
-                Due Date <span className="required">*</span>
-              </label>
-              <input
-                type="date"
-                className="form-input"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                required
-              />
+            {/* Dispatch Action Explanation Banner */}
+            <div className="dispatch-action-guide">
+              <div className="guide-header">
+                <Clock size={15} color="var(--primary)" />
+                <span>Next Step Action Choices:</span>
+              </div>
+              <div className="guide-options">
+                <div className="guide-option-item">
+                  <Save size={13} color="var(--text-secondary)" />
+                  <span><strong>Save & Allot:</strong> Queues task as <code>pending</code> without sending email.</span>
+                </div>
+                <div className="guide-option-item">
+                  <Send size={13} color="var(--primary)" />
+                  <span><strong>Allot & Send Email:</strong> Allots task and immediately delivers email to assignee inbox.</span>
+                </div>
+              </div>
             </div>
           </div>
 
+          {/* Sticky Modal Footer with Both Clear Save and Send Actions */}
           <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              disabled={submittingAction !== null}
+            >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={loading || activeEmployees.length === 0}>
-              {loading ? (
+
+            {/* Action 1: Save & Allot as Pending */}
+            <button
+              type="button"
+              className="btn btn-outline-primary"
+              onClick={() => handleAllot(false)}
+              disabled={submittingAction !== null || activeEmployees.length === 0}
+              title="Assign task and store in queue as Pending"
+            >
+              {submittingAction === 'save' ? (
                 <>
-                  <span className="spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></span>
-                  <span>Allotting Task...</span>
+                  <span className="spinner spinner-sm"></span>
+                  <span>Saving...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles size={14} />
-                  <span>Allot & Queue Task</span>
+                  <Save size={15} />
+                  <span>Save & Allot (Pending)</span>
+                </>
+              )}
+            </button>
+
+            {/* Action 2: Allot & Send Email Immediately */}
+            <button
+              type="button"
+              className="btn btn-gradient-primary"
+              onClick={() => handleAllot(true)}
+              disabled={submittingAction !== null || activeEmployees.length === 0}
+              title="Assign task and immediately send email notification to employee"
+            >
+              {submittingAction === 'send' ? (
+                <>
+                  <span className="spinner spinner-sm"></span>
+                  <span>Sending Email...</span>
+                </>
+              ) : (
+                <>
+                  <Send size={15} />
+                  <span>Allot & Send Email Now</span>
                 </>
               )}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

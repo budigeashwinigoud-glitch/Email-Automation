@@ -255,3 +255,153 @@ def test_create_task_with_department_and_round_robin(client, db_session):
     filtered = client.get("/api/tasks?department=Talented Engineers").json()
     assert len(filtered) == 3
 
+
+def test_send_email_unconfigured_credentials(client, seed_employees, monkeypatch):
+    """When SMTP is not configured, POST /send returns 503 and preserves pending status."""
+    from app.config import settings
+    monkeypatch.setattr(settings, "SMTP_HOST", "")
+    monkeypatch.setattr(settings, "SMTP_USER", "")
+    monkeypatch.setattr(settings, "SMTP_PASSWORD", "")
+
+    emp = seed_employees[0]
+    task = client.post("/api/tasks", json={
+        "title": "Unconfigured Send",
+        "description": "Desc",
+        "priority": "High",
+        "due_date": "2026-10-30",
+        "assignee": emp.id
+    }).json()
+
+    res = client.post(f"/api/tasks/{task['id']}/send")
+    assert res.status_code == 503
+    assert "not configured" in res.json()["detail"].lower()
+
+    # Task remains pending
+    check_task = client.get(f"/api/tasks/{task['id']}").json()
+    assert check_task["status"] == "pending"
+    assert check_task["sent_at"] is None
+
+
+def test_send_email_success(client, seed_employees, monkeypatch):
+    """Successful email delivery updates task status to sent and sets sent_at."""
+    from app.config import settings
+    monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(settings, "SMTP_USER", "hr@example.com")
+    monkeypatch.setattr(settings, "SMTP_PASSWORD", "secret")
+
+    # Mock send_task_email to succeed
+    sent_calls = []
+    def mock_send(t, emp):
+        sent_calls.append((t.id, emp.email))
+        return {"status": "delivered"}
+
+    monkeypatch.setattr("app.routes.tasks.send_task_email", mock_send)
+
+    emp = seed_employees[0]
+    task = client.post("/api/tasks", json={
+        "title": "Email Deliverable",
+        "description": "Deliver this task via email",
+        "priority": "High",
+        "due_date": "2026-10-30",
+        "assignee": emp.id
+    }).json()
+
+    res = client.post(f"/api/tasks/{task['id']}/send")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "sent"
+    assert data["sent_at"] is not None
+    assert len(sent_calls) == 1
+    assert sent_calls[0] == (task["id"], emp.email)
+
+    # Verify task status persisted in database
+    persisted = client.get(f"/api/tasks/{task['id']}").json()
+    assert persisted["status"] == "sent"
+    assert persisted["sent_at"] is not None
+
+
+def test_send_email_nonexistent_task(client):
+    """Sending a nonexistent task returns 404."""
+    res = client.post("/api/tasks/99999/send")
+    assert res.status_code == 404
+
+
+def test_send_email_already_sent_task(client, seed_employees, monkeypatch):
+    """An already sent task cannot be sent again."""
+    from app.config import settings
+    monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(settings, "SMTP_USER", "hr@example.com")
+    monkeypatch.setattr(settings, "SMTP_PASSWORD", "secret")
+    monkeypatch.setattr("app.routes.tasks.send_task_email", lambda t, emp: {"status": "delivered"})
+
+    emp = seed_employees[0]
+    task = client.post("/api/tasks", json={
+        "title": "Duplicate Send Test",
+        "description": "Desc",
+        "priority": "Medium",
+        "due_date": "2026-10-30",
+        "assignee": emp.id
+    }).json()
+
+    # First send succeeds
+    res1 = client.post(f"/api/tasks/{task['id']}/send")
+    assert res1.status_code == 200
+
+    # Second send fails with 400
+    res2 = client.post(f"/api/tasks/{task['id']}/send")
+    assert res2.status_code == 400
+    assert "already been sent" in res2.json()["detail"].lower()
+
+
+def test_send_email_completed_task(client, seed_employees):
+    """A completed task cannot be sent."""
+    emp = seed_employees[0]
+    task = client.post("/api/tasks", json={
+        "title": "Completed Task Send Test",
+        "description": "Desc",
+        "priority": "Low",
+        "due_date": "2026-10-30",
+        "assignee": emp.id
+    }).json()
+
+    # Advance status to done
+    client.patch(f"/api/tasks/{task['id']}/status", json={"status": "done"})
+
+    # Attempt send
+    res = client.post(f"/api/tasks/{task['id']}/send")
+    assert res.status_code == 400
+    assert "already been completed" in res.json()["detail"].lower()
+
+
+def test_send_email_smtp_failure_preserves_pending(client, seed_employees, monkeypatch):
+    """When SMTP delivery throws an exception, task remains pending and 502 is returned."""
+    from app.config import settings
+    from fastapi import HTTPException
+    monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(settings, "SMTP_USER", "hr@example.com")
+    monkeypatch.setattr(settings, "SMTP_PASSWORD", "secret")
+
+    def mock_failing_send(t, emp):
+        raise HTTPException(status_code=502, detail=f"Failed to deliver email to {emp.email}: Connection refused")
+
+    monkeypatch.setattr("app.routes.tasks.send_task_email", mock_failing_send)
+
+    emp = seed_employees[0]
+    task = client.post("/api/tasks", json={
+        "title": "Failing SMTP Task",
+        "description": "Should stay pending",
+        "priority": "High",
+        "due_date": "2026-10-30",
+        "assignee": emp.id
+    }).json()
+
+    res = client.post(f"/api/tasks/{task['id']}/send")
+    assert res.status_code == 502
+    assert "connection refused" in res.json()["detail"].lower()
+
+    # Confirm task status is still pending and sent_at is None
+    persisted = client.get(f"/api/tasks/{task['id']}").json()
+    assert persisted["status"] == "pending"
+    assert persisted["sent_at"] is None
+
+

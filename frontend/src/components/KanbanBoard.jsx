@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, Send, CheckCircle2, Calendar, Edit2, Trash2, Eye, ArrowRight } from 'lucide-react';
+import { Clock, Send, CheckCircle2, Calendar, Edit2, Trash2, Mail, Loader2, RotateCcw } from 'lucide-react';
 import { getAvatarColor, getInitials } from '../utils/colors';
 
 export default function KanbanBoard({
@@ -8,6 +8,9 @@ export default function KanbanBoard({
   onEditTask,
   onDeleteTask,
   onQuickStatusChange,
+  onSendEmail,
+  sendingTaskIds = [],
+  failedTaskIds = [],
 }) {
   const pendingTasks = tasks.filter((t) => t.status === 'pending');
   const sentTasks = tasks.filter((t) => t.status === 'sent');
@@ -17,15 +20,10 @@ export default function KanbanBoard({
     {
       id: 'pending',
       title: 'Pending Delivery',
-      subtitle: 'Awaiting email automation dispatch',
+      subtitle: 'Awaiting email dispatch to assignee',
       tasks: pendingTasks,
       icon: <Clock size={16} color="#d97706" />,
       badgeClass: 'badge-pending',
-      nextAction: {
-        targetStatus: 'sent',
-        label: 'Dispatch Email',
-        icon: <Send size={12} />,
-      },
     },
     {
       id: 'sent',
@@ -86,6 +84,8 @@ export default function KanbanBoard({
               col.tasks.map((task) => {
                 const colors = getAvatarColor(task.assigned_to?.name, task.assigned_to?.id);
                 const priorityClass = `badge-priority-${task.priority.toLowerCase()}`;
+                const isSending = sendingTaskIds.includes(task.id);
+                const isFailed = failedTaskIds.includes(task.id);
 
                 return (
                   <div key={task.id} className="kanban-card">
@@ -130,6 +130,43 @@ export default function KanbanBoard({
                       <Calendar size={13} />
                       <span>Due {task.due_date}</span>
                     </div>
+
+                    {/* Pending Column Controlled Send Email Button */}
+                    {col.id === 'pending' && onSendEmail && (
+                      <div style={{ marginTop: '10px' }}>
+                        {isSending ? (
+                          <button
+                            className="btn-task-send-email sending"
+                            disabled
+                            style={{ width: '100%', justifyContent: 'center' }}
+                            title="Sending email to employee..."
+                          >
+                            <Loader2 size={13} className="spin-icon" />
+                            <span>Sending...</span>
+                          </button>
+                        ) : isFailed ? (
+                          <button
+                            className="btn-task-send-email retry"
+                            onClick={() => onSendEmail(task)}
+                            style={{ width: '100%', justifyContent: 'center' }}
+                            title="Email delivery failed. Click to try again."
+                          >
+                            <RotateCcw size={13} />
+                            <span>Try Again</span>
+                          </button>
+                        ) : (
+                          <button
+                            className="btn-task-send-email"
+                            onClick={() => onSendEmail(task)}
+                            style={{ width: '100%', justifyContent: 'center' }}
+                            title={`Send task email to ${task.assigned_to?.name || 'assigned staff'}`}
+                          >
+                            <Mail size={13} />
+                            <span>Send Email</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                     <div className="kanban-card-footer">
                       <div className="user-badge" title={task.assigned_to?.email}>

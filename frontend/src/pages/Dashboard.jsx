@@ -8,7 +8,7 @@ import EditTaskModal from '../components/EditTaskModal';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { api } from '../services/api';
-import { Plus, Filter, RotateCcw, Search, LayoutGrid, List } from 'lucide-react';
+import { Plus, Filter, RotateCcw, Search, LayoutGrid, List, X } from 'lucide-react';
 import { PREDEFINED_DEPARTMENTS } from '../constants/departments';
 
 export default function Dashboard({
@@ -36,6 +36,12 @@ export default function Dashboard({
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
+
+  // Send Email State
+  const [taskToSendEmail, setTaskToSendEmail] = useState(null);
+  const [isSendEmailConfirmOpen, setIsSendEmailConfirmOpen] = useState(false);
+  const [sendingTaskIds, setSendingTaskIds] = useState([]);
+  const [failedTaskIds, setFailedTaskIds] = useState([]);
 
   const loadDashboardData = useCallback(async (silent = false) => {
     try {
@@ -78,12 +84,16 @@ export default function Dashboard({
     );
   }, [tasks, searchQuery]);
 
-  const handleTaskCreated = (newTask) => {
+  const handleTaskCreated = (newTask, wasEmailed = false, emailError = null) => {
     // 1. Optimistic instant addition to tasks state (0ms lag!)
     setTasks((prev) => {
-      if (prev.some((t) => t.id === newTask.id)) return prev;
+      if (prev.some((t) => t.id === newTask.id)) {
+        return prev.map((t) => (t.id === newTask.id ? newTask : t));
+      }
       return [newTask, ...prev];
     });
+
+    const isSent = newTask.status === 'sent' || wasEmailed;
 
     // 2. Optimistic instant increment of stats counters
     setStats((prev) => {
@@ -91,16 +101,34 @@ export default function Dashboard({
       return {
         ...prev,
         total_tasks: (prev.total_tasks || 0) + 1,
-        pending_tasks: (prev.pending_tasks || 0) + 1,
+        pending_tasks: isSent ? (prev.pending_tasks || 0) : (prev.pending_tasks || 0) + 1,
+        sent_tasks: isSent ? (prev.sent_tasks || 0) + 1 : (prev.sent_tasks || 0),
       };
     });
 
     // 3. User toast notification
-    showToast(
-      'success',
-      'Task Successfully Allotted',
-      `Assigned to ${newTask.assigned_to?.name || 'staff'} (${newTask.assigned_to?.email || ''}) with status 'pending'.`
-    );
+    const assigneeName = newTask.assigned_to?.name || 'staff member';
+    const assigneeEmail = newTask.assigned_to?.email || '';
+
+    if (isSent) {
+      showToast(
+        'success',
+        'Task Allotted & Email Sent!',
+        `Successfully assigned to ${assigneeName} and dispatched to ${assigneeEmail}.`
+      );
+    } else if (emailError) {
+      showToast(
+        'warning',
+        'Task Allotted (Email Pending)',
+        `Assigned to ${assigneeName} as pending. Note: ${emailError}`
+      );
+    } else {
+      showToast(
+        'success',
+        'Task Saved & Allotted',
+        `Assigned to ${assigneeName} (${assigneeEmail}) in pending queue.`
+      );
+    }
 
     // 4. Silent background sync without unmounting table or showing loading spinners
     loadDashboardData(true);
@@ -170,6 +198,65 @@ export default function Dashboard({
     }
   };
 
+  const handleInitiateSendEmail = (task) => {
+    setTaskToSendEmail(task);
+    setIsSendEmailConfirmOpen(true);
+  };
+
+  const handleConfirmSendEmail = async () => {
+    if (!taskToSendEmail) return;
+    const target = taskToSendEmail;
+    const assigneeName = target.assigned_to?.name || 'the assigned employee';
+    setIsSendEmailConfirmOpen(false);
+    setTaskToSendEmail(null);
+
+    // Disable button and show [ Sending... ]
+    setSendingTaskIds((prev) => [...prev, target.id]);
+    setFailedTaskIds((prev) => prev.filter((id) => id !== target.id));
+
+    try {
+      // Send task email via backend email service (DO NOT optimistically mark as Sent)
+      const updatedTask = await api.sendTaskEmail(target.id);
+
+      // Only after successful email delivery confirmation from backend:
+      // 1. Update task in local state with new status ('sent') and 'sent_at'
+      setTasks((prev) =>
+        prev.map((t) => (t.id === target.id ? updatedTask : t))
+      );
+
+      // 2. Update dashboard status counters: decrement pending, increment sent
+      setStats((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          pending_tasks: Math.max(0, (prev.pending_tasks || 0) - 1),
+          sent_tasks: (prev.sent_tasks || 0) + 1,
+        };
+      });
+
+      // 3. Display success toast
+      showToast(
+        'success',
+        'Email Sent',
+        `Task email sent successfully to ${assigneeName}.`
+      );
+
+      // 4. Background refresh
+      loadDashboardData(true);
+    } catch (err) {
+      // If email sending fails:
+      // Keep task pending, mark as failed for retry button, display error toast
+      setFailedTaskIds((prev) => [...prev, target.id]);
+      showToast(
+        'error',
+        'Email Sending Failed',
+        err.message || 'Email could not be sent. Please try again.'
+      );
+    } finally {
+      setSendingTaskIds((prev) => prev.filter((id) => id !== target.id));
+    }
+  };
+
   const resetFilters = () => {
     setStatusFilter('All');
     setAssigneeFilter('All');
@@ -223,10 +310,20 @@ export default function Dashboard({
               <input
                 type="text"
                 className="search-input"
-                placeholder="Search tasks or assignees..."
+                placeholder="Search by title, description, or assignee..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="search-clear-btn"
+                  onClick={() => setSearchQuery('')}
+                  title="Clear search"
+                >
+                  <X size={13} />
+                </button>
+              )}
             </div>
 
             {/* Department Filter */}
@@ -307,17 +404,12 @@ export default function Dashboard({
               <button
                 className="btn btn-secondary btn-sm"
                 onClick={resetFilters}
-                title="Reset all filters"
+                title="Reset all filters to default"
               >
                 <RotateCcw size={13} />
-                <span>Reset</span>
+                <span>Reset Filters</span>
               </button>
             )}
-
-            <button className="btn btn-primary btn-sm" onClick={() => setIsCreateTaskOpen(true)}>
-              <Plus size={14} />
-              <span>Allot Task</span>
-            </button>
           </div>
         </div>
 
@@ -339,6 +431,9 @@ export default function Dashboard({
               setIsDeleteOpen(true);
             }}
             onQuickStatusChange={handleQuickStatusChange}
+            onSendEmail={handleInitiateSendEmail}
+            sendingTaskIds={sendingTaskIds}
+            failedTaskIds={failedTaskIds}
           />
         ) : (
           <KanbanBoard
@@ -356,6 +451,9 @@ export default function Dashboard({
               setIsDeleteOpen(true);
             }}
             onQuickStatusChange={handleQuickStatusChange}
+            onSendEmail={handleInitiateSendEmail}
+            sendingTaskIds={sendingTaskIds}
+            failedTaskIds={failedTaskIds}
           />
         )}
       </div>
@@ -377,6 +475,7 @@ export default function Dashboard({
           setSelectedTask(task);
           setIsEditOpen(true);
         }}
+        onSendEmail={handleInitiateSendEmail}
       />
 
       <EditTaskModal
@@ -386,6 +485,7 @@ export default function Dashboard({
         onSuccess={handleTaskUpdated}
       />
 
+      {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={isDeleteOpen}
         title="Delete Task"
@@ -402,6 +502,25 @@ export default function Dashboard({
         }}
         isDanger={true}
       />
+
+      {/* Send Email Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isSendEmailConfirmOpen}
+        title="Send Task Email"
+        message={
+          taskToSendEmail
+            ? `Send this task to ${taskToSendEmail.assigned_to?.name || 'the assigned employee'} by email?`
+            : ''
+        }
+        confirmText="Send Email"
+        onConfirm={handleConfirmSendEmail}
+        onCancel={() => {
+          setIsSendEmailConfirmOpen(false);
+          setTaskToSendEmail(null);
+        }}
+        isDanger={false}
+      />
     </div>
   );
 }
+

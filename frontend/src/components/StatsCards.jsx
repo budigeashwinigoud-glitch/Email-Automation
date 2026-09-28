@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, Clock, Send, CheckCircle2, Users } from 'lucide-react';
+import { Layers, Clock, Send, CheckCircle2, Users, ArrowUpRight } from 'lucide-react';
 
 export default function StatsCards({ stats, onSelectStatusFilter, currentStatusFilter }) {
   const {
@@ -20,6 +20,7 @@ export default function StatsCards({ stats, onSelectStatusFilter, currentStatusF
       classModifier: 'card-total',
       iconClass: 'stat-icon-total',
       subtext: 'Across all lifecycle stages',
+      badge: 'All',
     },
     {
       id: 'pending',
@@ -30,6 +31,7 @@ export default function StatsCards({ stats, onSelectStatusFilter, currentStatusF
       classModifier: 'card-pending',
       iconClass: 'stat-icon-pending',
       subtext: 'Awaiting email dispatch',
+      badge: total_tasks > 0 ? `${Math.round((pending_tasks / total_tasks) * 100)}%` : '0%',
     },
     {
       id: 'sent',
@@ -39,7 +41,8 @@ export default function StatsCards({ stats, onSelectStatusFilter, currentStatusF
       icon: <Send size={20} />,
       classModifier: 'card-sent',
       iconClass: 'stat-icon-sent',
-      subtext: 'In employee inbox',
+      subtext: 'Delivered to inbox',
+      badge: total_tasks > 0 ? `${Math.round((sent_tasks / total_tasks) * 100)}%` : '0%',
     },
     {
       id: 'done',
@@ -49,17 +52,19 @@ export default function StatsCards({ stats, onSelectStatusFilter, currentStatusF
       icon: <CheckCircle2 size={20} />,
       classModifier: 'card-done',
       iconClass: 'stat-icon-completed',
-      subtext: 'Marked as finished',
+      subtext: 'Successfully finished',
+      badge: total_tasks > 0 ? `${Math.round((completed_tasks / total_tasks) * 100)}%` : '0%',
     },
     {
       id: 'employees',
       filterVal: null,
-      label: 'Active Employees',
+      label: 'Active Staff',
       value: active_employees,
       icon: <Users size={20} />,
       classModifier: 'card-employees',
       iconClass: 'stat-icon-employees',
-      subtext: 'In round-robin rotation',
+      subtext: 'In rotation pool',
+      badge: 'Active',
     },
   ];
 
@@ -72,23 +77,29 @@ export default function StatsCards({ stats, onSelectStatusFilter, currentStatusF
         return (
           <div
             key={card.id}
-            className={`stat-card ${card.classModifier}`}
+            className={`stat-card ${card.classModifier} ${isSelected ? 'selected-filter-card' : ''}`}
             onClick={() => isClickable && onSelectStatusFilter(card.filterVal)}
             style={{
               cursor: isClickable ? 'pointer' : 'default',
-              borderColor: isSelected ? 'var(--primary)' : undefined,
-              boxShadow: isSelected ? '0 0 0 2px rgba(37, 99, 235, 0.2)' : undefined,
             }}
-            title={isClickable ? `Click to filter by ${card.label}` : undefined}
+            title={isClickable ? `Filter tasks by ${card.label}` : undefined}
           >
             <div className="stat-header">
               <span className="stat-label">{card.label}</span>
-              <div className={`stat-icon-wrapper ${card.iconClass}`}>
-                {card.icon}
+              <div className="stat-header-right">
+                <span className="stat-trend-chip">{card.badge}</span>
+                <div className={`stat-icon-wrapper ${card.iconClass}`}>
+                  {card.icon}
+                </div>
               </div>
             </div>
             <div className="stat-value">{card.value}</div>
             <div className="stat-subtext">{card.subtext}</div>
+            {isSelected && (
+              <div className="stat-active-indicator">
+                <span>Active Filter</span>
+              </div>
+            )}
           </div>
         );
       })}

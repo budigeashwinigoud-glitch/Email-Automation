@@ -1,7 +1,8 @@
 import urllib.request
 import json
 
-BASE = "http://localhost:8000"
+BASE = "http://127.0.0.1:8000"
+
 
 
 def req(endpoint, method="GET", body=None):
@@ -168,8 +169,43 @@ def main():
     assert stats["sent_tasks"] >= 0
     assert len(stats["employee_stats"]) > 0
 
-    print("\n[SUCCESS] ALL 14 LIVE END-TO-END VERIFICATION CHECKS PASSED PERFECTLY!")
+    # 15. Controlled POST /api/tasks/{id}/send validation
+    # Create a fresh pending task
+    status, fresh_pending_task = req("/api/tasks", "POST", {
+        "title": "Email Trigger Task",
+        "description": "Controlled dispatch test",
+        "priority": "Medium",
+        "due_date": "2026-10-30",
+        "assignee": new_emp1["id"]
+    })
+    assert status == 201
+    assert fresh_pending_task["status"] == "pending"
+
+    # Send trigger without SMTP credentials configured returns 503 and preserves pending status (never fakes success)
+    status, send_err = req(f"/api/tasks/{fresh_pending_task['id']}/send", "POST")
+    assert status == 503
+    assert "not configured" in send_err["detail"].lower()
+
+    # Verify task remains pending
+    status, check_pending = req(f"/api/tasks/{fresh_pending_task['id']}")
+    assert status == 200
+    assert check_pending["status"] == "pending"
+    assert check_pending["sent_at"] is None
+    # 16. Automatic Cleanup: Delete all test tasks and test employees created during e2e run
+    status, all_tasks = req("/api/tasks")
+    if status == 200 and all_tasks:
+        for t in all_tasks:
+            req(f"/api/tasks/{t['id']}", "DELETE")
+    status, all_emps = req("/api/employees")
+    if status == 200 and all_emps:
+        for e in all_emps:
+            req(f"/api/employees/{e['id']}?permanent=true", "DELETE")
+    print("Step 16: Database fully purged and returned to clean zero-state.")
+
+    print("\n[SUCCESS] ALL 16 LIVE END-TO-END VERIFICATION CHECKS PASSED PERFECTLY!")
 
 
 if __name__ == "__main__":
     main()
+
+

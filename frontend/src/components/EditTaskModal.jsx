@@ -102,8 +102,8 @@ export default function EditTaskModal({ isOpen, task, onClose, onSuccess }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body">
+        <form className="modal-form" onSubmit={handleSubmit}>
+          <div className="modal-body custom-scrollbar">
             {error && (
               <div className="alert alert-danger">
                 <AlertCircle size={16} />

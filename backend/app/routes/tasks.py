@@ -7,6 +7,8 @@ from ..database import get_db
 from ..models import Task, Employee
 from ..schemas import TaskCreate, TaskUpdate, TaskStatusUpdate, TaskResponse
 from ..services.assignment import get_next_round_robin_employee
+from ..services.email import send_task_email, is_email_service_configured
+from ..services.worker import process_pending_tasks
 
 router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
 
@@ -19,6 +21,7 @@ def create_task(
     """
     Create a new task with manual or automatic round-robin assignment.
     Supports department-specific task allotment and round-robin.
+    If email service is configured, automatically delivers task email to assignee immediately.
     """
     if payload.assignee == "auto":
         assigned_employee = get_next_round_robin_employee(db, department=payload.department)
@@ -53,6 +56,20 @@ def create_task(
     db.refresh(new_task)
     # Ensure relationship is loaded
     db.refresh(new_task, ["assigned_employee"])
+
+    # Auto-dispatch email immediately if SMTP credentials are configured
+    if is_email_service_configured() and assigned_employee and assigned_employee.email:
+        try:
+            send_task_email(new_task, assigned_employee)
+            new_task.status = "sent"
+            new_task.sent_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(new_task)
+            db.refresh(new_task, ["assigned_employee"])
+        except Exception:
+            # If email delivery fails, keep task pending in queue
+            db.rollback()
+
     return new_task
 
 
@@ -97,6 +114,17 @@ def get_pending_tasks(
         .all()
     )
     return tasks
+
+
+@router.post("/process-pending")
+def trigger_process_pending_tasks(
+    db: Session = Depends(get_db)
+):
+    """
+    Triggers an immediate processing cycle of the background email worker.
+    Processes all pending tasks and delivers them via email to assigned employees.
+    """
+    return process_pending_tasks(db)
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
@@ -206,6 +234,70 @@ def update_task_status(
     return task
 
 
+@router.post("/{task_id}/send", response_model=TaskResponse)
+def send_task_email_endpoint(
+    task_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Controlled manual trigger to deliver a pending task to its assigned employee via email.
+    The task moves from 'pending' to 'sent' ONLY after the email service confirms successful delivery.
+    """
+    task = (
+        db.query(Task)
+        .options(joinedload(Task.assigned_employee))
+        .filter(Task.id == task_id)
+        .first()
+    )
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Task with ID {task_id} not found."
+        )
+
+    if not task.assigned_to or not task.assigned_employee:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Task does not have an assigned employee."
+        )
+
+    employee = task.assigned_employee
+    if not employee.email or not employee.email.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Assigned employee does not have a valid email address."
+        )
+
+    if task.status == "sent":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Task email has already been sent."
+        )
+
+    if task.status == "done":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Task has already been completed."
+        )
+
+    if task.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot send email for task with status '{task.status}'. Task must be pending."
+        )
+
+    # Attempt actual email delivery via configured service
+    send_task_email(task, employee)
+
+    # Only after successful delivery, update status and sent_at
+    task.status = "sent"
+    task.sent_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(task)
+    db.refresh(task, ["assigned_employee"])
+    return task
+
+
 @router.delete("/{task_id}")
 def delete_task(
     task_id: int,
@@ -227,3 +319,4 @@ def delete_task(
         "message": "Task deleted successfully.",
         "id": task_id
     }
+

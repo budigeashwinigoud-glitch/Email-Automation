@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCw, Users, AlertCircle } from 'lucide-react';
+import { RefreshCw, Users, Sparkles, ArrowRight, UserCheck } from 'lucide-react';
 import { getAvatarColor, getInitials } from '../utils/colors';
 
 export default function RoundRobinTracker({ employees = [], lastAssignedId = null, onNavigateToEmployees }) {
@@ -7,18 +7,24 @@ export default function RoundRobinTracker({ employees = [], lastAssignedId = nul
 
   if (activeEmployees.length === 0) {
     return (
-      <div className="rr-tracker-banner" style={{ background: '#f8fafc', borderColor: '#e2e8f0' }}>
+      <div className="rr-tracker-banner empty-rr">
         <div className="rr-tracker-info">
-          <div className="rr-icon-box" style={{ background: '#f1f5f9', color: '#64748b', borderColor: '#cbd5e1' }}>
+          <div className="rr-icon-box empty">
             <Users size={20} />
           </div>
           <div>
-            <div className="rr-title">Round-Robin Allotment Ready</div>
+            <div className="rr-title">Deterministic Round-Robin Allotment</div>
             <div className="rr-desc">
-              No employees registered yet. Add team members in the <strong>Employees</strong> section to begin task allotment.
+              No active team members registered yet. Add employees in the directory to enable automated cyclic task distribution.
             </div>
           </div>
         </div>
+        {onNavigateToEmployees && (
+          <button className="btn btn-secondary btn-sm" onClick={onNavigateToEmployees}>
+            <span>Go to Employees</span>
+            <ArrowRight size={13} />
+          </button>
+        )}
       </div>
     );
   }
@@ -43,18 +49,26 @@ export default function RoundRobinTracker({ employees = [], lastAssignedId = nul
     <div className="rr-tracker-banner">
       <div className="rr-tracker-info">
         <div className="rr-icon-box">
-          <RefreshCw size={20} />
+          <Sparkles size={18} />
         </div>
         <div>
-          <div className="rr-title">Live Round-Robin Allotment Engine</div>
+          <div className="rr-title-row">
+            <span className="rr-title">Automated Round-Robin Rotation</span>
+            <span className="rr-status-pill">
+              <UserCheck size={12} />
+              <span>{activeEmployees.length} Eligible Staff</span>
+            </span>
+          </div>
           <div className="rr-desc">
-            {activeEmployees.length} active employee{activeEmployees.length > 1 ? 's' : ''} in deterministic rotation. Next auto-assigned task goes to{' '}
-            <strong style={{ color: 'var(--primary)' }}>{nextEmployee?.name || 'N/A'}</strong>.
+            Next auto-allotted task will be assigned to{' '}
+            <strong className="rr-highlight-name">
+              {nextEmployee ? `${nextEmployee.name} (${nextEmployee.email})` : 'Next Staff'}
+            </strong>.
           </div>
         </div>
       </div>
 
-      <div className="rr-queue">
+      <div className="rr-queue custom-scrollbar">
         {activeEmployees.map((emp, idx) => {
           const isNext = nextEmployee && nextEmployee.id === emp.id;
           const colors = getAvatarColor(emp.name, emp.id);
@@ -63,25 +77,22 @@ export default function RoundRobinTracker({ employees = [], lastAssignedId = nul
             <React.Fragment key={emp.id}>
               <div
                 className={`rr-node ${isNext ? 'next-in-line' : ''}`}
-                title={`ID #${emp.id}: ${emp.name} (${emp.email})`}
+                title={`#${emp.id}: ${emp.name} — ${emp.email}${emp.department ? ` [${emp.department}]` : ''}`}
               >
                 <div
+                  className="rr-node-avatar"
                   style={{
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
                     background: colors.bg,
                     color: colors.text,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '10px',
-                    fontWeight: 700,
+                    border: `1.5px solid ${isNext ? '#2563eb' : colors.border}`,
                   }}
                 >
                   {getInitials(emp.name)}
                 </div>
-                <span>{emp.name}</span>
+                <div className="rr-node-meta">
+                  <span className="rr-node-name">{emp.name}</span>
+                  {emp.department && <span className="rr-node-dept">{emp.department}</span>}
+                </div>
                 {isNext && <span className="rr-next-badge">Next</span>}
               </div>
               {idx < activeEmployees.length - 1 && <span className="rr-arrow">→</span>}

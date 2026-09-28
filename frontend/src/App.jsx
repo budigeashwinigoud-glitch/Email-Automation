@@ -47,6 +47,7 @@ export default function App() {
     setRefreshTrigger((prev) => prev + 1);
     setTimeout(() => {
       setIsRefreshing(false);
+      showToast('success', 'Data Synchronized', 'Dashboard and staff records updated.');
     }, 450);
   };
 

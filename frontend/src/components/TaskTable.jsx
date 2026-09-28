@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, Edit2, Trash2, Calendar, Layers, Send, CheckCircle2 } from 'lucide-react';
+import { Eye, Edit2, Trash2, Calendar, Layers, Mail, CheckCircle2, Loader2, RotateCcw } from 'lucide-react';
 import { getAvatarColor, getInitials } from '../utils/colors';
 
 export default function TaskTable({
@@ -9,6 +9,9 @@ export default function TaskTable({
   onEditTask,
   onDeleteTask,
   onQuickStatusChange,
+  onSendEmail,
+  sendingTaskIds = [],
+  failedTaskIds = [],
 }) {
   if (loading) {
     return (
@@ -67,6 +70,8 @@ export default function TaskTable({
             const priorityClass = `badge-priority-${task.priority.toLowerCase()}`;
             const statusClass = `badge-${task.status.toLowerCase()}`;
             const dept = task.department || task.assigned_to?.department;
+            const isSending = sendingTaskIds.includes(task.id);
+            const isFailed = failedTaskIds.includes(task.id);
 
             return (
               <tr key={task.id}>
@@ -150,25 +155,51 @@ export default function TaskTable({
                   </div>
                 </td>
 
-                {/* Status & Quick Advance */}
+                {/* Status & Lifecycle Action Area */}
                 <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span className={`badge ${statusClass}`}>
                       <span className="badge-dot"></span>
-                      {task.status === 'pending' ? 'Pending Email' : task.status === 'sent' ? 'Dispatched' : 'Completed'}
+                      {task.status === 'pending'
+                        ? 'Pending Delivery'
+                        : task.status === 'sent'
+                        ? 'Dispatched'
+                        : 'Completed'}
                     </span>
 
-                    {/* Quick status button */}
-                    {task.status === 'pending' && onQuickStatusChange && (
-                      <button
-                        className="btn-icon"
-                        onClick={() => onQuickStatusChange(task.id, 'sent')}
-                        title="Simulate future Email Automation: mark as Sent"
-                        style={{ color: 'var(--primary)', padding: '3px' }}
-                      >
-                        <Send size={13} />
-                      </button>
+                    {/* Controlled Send Now action strictly for Pending tasks */}
+                    {task.status === 'pending' && onSendEmail && (
+                      isSending ? (
+                        <button
+                          className="btn-task-send-email sending"
+                          disabled
+                          title="Sending email to employee immediately..."
+                        >
+                          <Loader2 size={12} className="spin-icon" />
+                          <span>Sending...</span>
+                        </button>
+                      ) : isFailed ? (
+                        <button
+                          className="btn-task-send-email retry"
+                          onClick={() => onSendEmail(task)}
+                          title="Email delivery failed. Click to send immediately."
+                        >
+                          <RotateCcw size={12} />
+                          <span>Send Now</span>
+                        </button>
+                      ) : (
+                        <button
+                          className="btn-task-send-email"
+                          onClick={() => onSendEmail(task)}
+                          title="Send this pending task immediately instead of waiting for the next worker cycle"
+                        >
+                          <Mail size={12} />
+                          <span>Send Now</span>
+                        </button>
+                      )
                     )}
+
+                    {/* Quick advance to Done strictly for Sent tasks */}
                     {task.status === 'sent' && onQuickStatusChange && (
                       <button
                         className="btn-icon"
@@ -176,7 +207,7 @@ export default function TaskTable({
                         title="Mark Task as Completed"
                         style={{ color: 'var(--done-dot)', padding: '3px' }}
                       >
-                        <CheckCircle2 size={13} />
+                        <CheckCircle2 size={14} />
                       </button>
                     )}
                   </div>
