@@ -65,13 +65,13 @@ The backend exposes clean, production-grade endpoints for the external email aut
 
 ### 3. FastAPI REST Engine & Database (Backend)
 - [x] **High-Performance Asynchronous REST API**: Built with FastAPI, Pydantic v2 schemas, and strict request/response data validation.
-- [x] **SQLite Database & SQLAlchemy 2.0 ORM**: Fully relational schema with `employees`, `tasks`, and `round_robin_state` tables.
+- [x] **SQLite/MySQL Database & SQLAlchemy 2.0 ORM**: Fully relational schema with `employees`, `tasks`, and `round_robin_state` tables; SQLite is the local default and hosted MySQL is supported.
 - [x] **Complete Employee Lifecycle & Cascade Deletion**:
   - `DELETE /api/employees/{id}?permanent=true`: Permanently deletes employee, deletes their assigned tasks, and resets round-robin state.
   - `DELETE /api/employees/{id}?permanent=false`: Soft-deactivates employee for audit preservation.
 - [x] **Deterministic Round-Robin Algorithm**:
   - Cyclically distributes tasks across dynamic numbers of active employees ($N \ge 1$).
-  - Persists rotation state directly in SQLite (`round_robin_state`), making it completely resilient across backend server restarts.
+  - Persists rotation state in the configured database (`round_robin_state`), making it resilient across backend server restarts.
   - Seamlessly skips deactivated employees and incorporates newly added staff into future rounds.
   - Supports both global and per-department round-robin states.
   - Manual assignments do not alter or disrupt the cyclical sequence.
@@ -109,7 +109,7 @@ The backend exposes clean, production-grade endpoints for the external email aut
                             │ SQLAlchemy ORM
                             ▼
 ┌────────────────────────────────────────────────────────┐
-│                 SQLite Database (belvo.db)             │
+│          SQLite (local) or Hosted MySQL Database       │
 │   • employees (id, name, email, department, active)    │
 │   • tasks (id, title, desc, dept, status, dates)       │
 │   • round_robin_state (dept, last_assigned_id)         │
@@ -352,3 +352,8 @@ Content-Type: application/json
 }
 ```
 The backend automatically timestamps `completed_at` and transitions the task to `done`.
+
+
+
+@thrijapippera-bot 
+i'm only response for the database and its protocol

@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 /**
  * Universal request helper with unified error extraction
@@ -43,7 +43,8 @@ async function request(endpoint, options = {}) {
     return data;
   } catch (err) {
     if (err.name === 'TypeError' && err.message.includes('fetch')) {
-      throw new Error(`Cannot connect to backend server at ${API_BASE_URL}. Please ensure the FastAPI backend is running.`);
+      const backendUrl = API_BASE_URL || 'the configured API proxy';
+      throw new Error(`Cannot connect to backend server at ${backendUrl}. Please ensure the FastAPI backend is running.`);
     }
     throw err;
   }

@@ -170,13 +170,14 @@ def main():
     assert len(stats["employee_stats"]) > 0
 
     # 15. Controlled POST /api/tasks/{id}/send validation
-    # Create a fresh pending task
+    # Use an employee that is still active after earlier deactivation checks.
+    send_test_employee = next(emp for emp in test_staff if emp["id"] != target_to_skip_id)
     status, fresh_pending_task = req("/api/tasks", "POST", {
         "title": "Email Trigger Task",
         "description": "Controlled dispatch test",
         "priority": "Medium",
         "due_date": "2026-10-30",
-        "assignee": new_emp1["id"]
+        "assignee": send_test_employee["id"]
     })
     assert status == 201
     assert fresh_pending_task["status"] == "pending"

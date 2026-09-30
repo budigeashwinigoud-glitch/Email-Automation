@@ -50,30 +50,31 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
 
     # Lightweight automatic migration for SQLite to ensure all columns exist
-    with engine.connect() as conn:
-        try:
-            # Check employees table
-            res = conn.execute(text("PRAGMA table_info(employees)")).fetchall()
-            cols = [r[1] for r in res]
-            if cols and "department" not in cols:
-                conn.execute(text("ALTER TABLE employees ADD COLUMN department VARCHAR(100)"))
-                conn.commit()
+    if engine.dialect.name == "sqlite":
+        with engine.connect() as conn:
+            try:
+                # Check employees table
+                res = conn.execute(text("PRAGMA table_info(employees)")).fetchall()
+                cols = [r[1] for r in res]
+                if cols and "department" not in cols:
+                    conn.execute(text("ALTER TABLE employees ADD COLUMN department VARCHAR(100)"))
+                    conn.commit()
 
-            # Check tasks table
-            res = conn.execute(text("PRAGMA table_info(tasks)")).fetchall()
-            cols = [r[1] for r in res]
-            if cols and "department" not in cols:
-                conn.execute(text("ALTER TABLE tasks ADD COLUMN department VARCHAR(100)"))
-                conn.commit()
+                # Check tasks table
+                res = conn.execute(text("PRAGMA table_info(tasks)")).fetchall()
+                cols = [r[1] for r in res]
+                if cols and "department" not in cols:
+                    conn.execute(text("ALTER TABLE tasks ADD COLUMN department VARCHAR(100)"))
+                    conn.commit()
 
-            # Check round_robin_state table
-            res = conn.execute(text("PRAGMA table_info(round_robin_state)")).fetchall()
-            cols = [r[1] for r in res]
-            if cols and "department" not in cols:
-                conn.execute(text("ALTER TABLE round_robin_state ADD COLUMN department VARCHAR(100)"))
-                conn.commit()
-        except Exception:
-            pass
+                # Check round_robin_state table
+                res = conn.execute(text("PRAGMA table_info(round_robin_state)")).fetchall()
+                cols = [r[1] for r in res]
+                if cols and "department" not in cols:
+                    conn.execute(text("ALTER TABLE round_robin_state ADD COLUMN department VARCHAR(100)"))
+                    conn.commit()
+            except Exception:
+                pass
 
     # Seed initial employee records if database is fresh
     db = SessionLocal()

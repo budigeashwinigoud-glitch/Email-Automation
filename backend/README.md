@@ -1,6 +1,6 @@
 # Belvo Task Allotment Engine — Backend API
 
-Production-ready REST API built with FastAPI, SQLAlchemy, and SQLite for the Belvo "Automated Task Allotment via Email" HR system.
+Production-ready REST API built with FastAPI and SQLAlchemy for the Belvo "Automated Task Allotment via Email" HR system.
 
 > **IMPORTANT NOTE ON EMAIL AUTOMATION**:  
 > Email delivery and scheduled automation are intentionally separated from this frontend/backend module. Another teammate implements the scheduled email delivery service. This backend exposes clean, dedicated integration endpoints for that service:
@@ -14,7 +14,7 @@ Production-ready REST API built with FastAPI, SQLAlchemy, and SQLite for the Bel
 - **Framework**: FastAPI (Python 3.10+)
 - **ORM**: SQLAlchemy 2.0
 - **Validation**: Pydantic v2
-- **Database**: SQLite (local development, single-file persistent storage `belvo.db`)
+- **Database**: SQLite by default; MySQL supported for hosted/shared deployments
 - **Documentation**: Swagger UI (`/docs`) & ReDoc (`/redoc`)
 - **Testing**: Pytest & HTTPX TestClient
 
@@ -51,6 +51,14 @@ FRONTEND_URL=http://localhost:5173
 SEED_INITIAL_EMPLOYEES=true
 ```
 
+To use a hosted MySQL database, install the backend requirements and set `DATABASE_URL` in `backend/.env`:
+
+```env
+DATABASE_URL=mysql+pymysql://DB_USER:DB_PASSWORD@DB_HOST:3306/DB_NAME?charset=utf8mb4
+```
+
+Get the host, database name, username, and password from your MySQL provider. Create a dedicated database user, allow connections from the machine running the backend, and enable the provider's TLS/SSL requirement. If the password contains URL-reserved characters, percent-encode them in the URL. Keep `.env` private and set the same `DATABASE_URL` as a secret environment variable when deploying the backend. The MySQL server must be hosted or otherwise network-accessible; a MySQL server bound only to your own computer is not reachable from elsewhere. The frontend connects to the backend API, not directly to MySQL.
+
 ### 4. Run Server
 
 ```bash
@@ -58,7 +66,7 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 The server will automatically:
-1. Initialize the SQLite database and create all tables on startup.
+1. Initialize the configured database and create all tables on startup.
 2. Seed initial employees if the Employee table is empty.
 3. Serve OpenAPI documentation at: `http://localhost:8000/docs`.
 
