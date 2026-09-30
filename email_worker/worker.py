@@ -2,7 +2,7 @@ import httpx
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from config import BACKEND_URL
-from email_service import send_email
+from email_service import read_unread_mail, send_email
 
 
 def process_pending_tasks():
@@ -42,11 +42,7 @@ Regards,
 Task Automation System
 """
 
-        send_email(
-            employee["email"],
-            subject,
-            body
-        )
+        send_email(employee["email"], subject, body)
 
         update_response = httpx.patch(
             f"{BACKEND_URL}/api/tasks/{task['id']}/status",
@@ -57,6 +53,13 @@ Task Automation System
         update_response.raise_for_status()
 
         print(f"Task {task['id']} marked as sent.")
+
+
+def read_mail_access_demo(limit: int = 5):
+    """Read the most recent unread messages from the configured inbox."""
+    messages = read_unread_mail(limit=limit)
+    print(f"Found {len(messages)} unread message(s).")
+    return messages
 
 
 scheduler = BlockingScheduler()
@@ -72,4 +75,4 @@ print("Checking for pending tasks every 1 minute...")
 
 process_pending_tasks()
 
-scheduler.start()python -m py_compile config.py email_service.py worker.py
+scheduler.start()

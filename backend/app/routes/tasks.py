@@ -57,19 +57,9 @@ def create_task(
     # Ensure relationship is loaded
     db.refresh(new_task, ["assigned_employee"])
 
-    # Auto-dispatch email immediately if SMTP credentials are configured
-    if is_email_service_configured() and assigned_employee and assigned_employee.email:
-        try:
-            send_task_email(new_task, assigned_employee)
-            new_task.status = "sent"
-            new_task.sent_at = datetime.now(timezone.utc)
-            db.commit()
-            db.refresh(new_task)
-            db.refresh(new_task, ["assigned_employee"])
-        except Exception:
-            # If email delivery fails, keep task pending in queue
-            db.rollback()
-
+    # Leave tasks in pending status until the explicit send endpoint or the
+    # scheduled worker confirms successful email delivery. This preserves the
+    # intended task lifecycle and prevents accidental "silent sends" on create.
     return new_task
 
 
