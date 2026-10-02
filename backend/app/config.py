@@ -5,10 +5,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     DATABASE_URL: str
-    FRONTEND_URL: str = "http://localhost:5173"
+    FRONTEND_URL: str = "https://email-automation-umber-tau.vercel.app/"
     CORS_ORIGINS: str = (
-        "http://localhost:5173,http://127.0.0.1:5173,"
-        "http://localhost:3000,http://127.0.0.1:3000"
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
     )
     # No default tasks or default people
     SEED_INITIAL_EMPLOYEES: bool = False
