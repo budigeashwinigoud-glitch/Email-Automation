@@ -22,7 +22,7 @@ The deployment providers need the current code from GitHub. Review and commit th
 2. Set the prompted environment values in Render, never in `render.yaml`:
    - `DATABASE_URL`: the rotated Neon PostgreSQL connection URL.
    - `FRONTEND_URL`: the Vercel HTTPS origin, with no trailing slash.
-   - `CORS_ORIGINS`: a JSON array containing the Vercel origin, e.g. `["https://your-app.vercel.app"]`. Replace the example with the real URL.
+   - `CORS_ORIGINS`: the Vercel origin, e.g. `https://your-app.vercel.app` (plain URL is accepted; no quotes or brackets needed).
    - `SMTP_USER` and `SMTP_FROM_EMAIL`: the sender account; `SMTP_PASSWORD`: its rotated Gmail App Password.
 3. Wait for `/` health check to pass. The API documentation is at `/docs` on the Render service URL.
 4. Keep this service to one instance while `ENABLE_EMAIL_WORKER=true`; the worker runs inside the API process and multiple instances could send duplicate emails. The free plan can sleep while idle, so the first request may be slow.
@@ -33,7 +33,7 @@ On startup the backend creates missing ORM tables and applies the existing addit
 
 1. In Vercel project settings, add `VITE_API_URL` with the Render HTTPS service origin, without a trailing slash (for example `https://your-api.onrender.com`).
 2. Redeploy the frontend so the Vite build embeds that API URL.
-3. In Render, verify `CORS_ORIGINS` contains the exact production Vercel origin. If you use Vercel preview URLs, add those origins too, or test through the production URL.
+3. In Render, verify `CORS_ORIGINS` contains the exact production Vercel origin. Multiple origins can be comma-separated; if you use Vercel preview URLs, add those origins too, or test through the production URL.
 
 ## 6. Verify production
 

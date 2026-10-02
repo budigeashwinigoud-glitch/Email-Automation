@@ -1,0 +1,1 @@
+DATABASE_URL=mysql+pymysql://username:ashu@localhost:3306/belvo_db?charset=utf8mb4
