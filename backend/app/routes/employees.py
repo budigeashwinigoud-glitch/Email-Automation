@@ -46,6 +46,7 @@ def create_employee(
         name=payload.name,
         email=payload.email,
         department=payload.department,
+        is_team_leader=payload.is_team_leader,
         active=True
     )
     db.add(employee)
@@ -105,6 +106,9 @@ def update_employee(
 
     if payload.department is not None:
         employee.department = payload.department
+
+    if payload.is_team_leader is not None:
+        employee.is_team_leader = payload.is_team_leader
 
     if payload.active is not None:
         employee.active = payload.active

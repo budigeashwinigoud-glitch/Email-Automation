@@ -10,6 +10,7 @@ class EmployeeBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
     department: Optional[str] = Field(None, max_length=100)
+    is_team_leader: bool = False
 
     @field_validator("name")
     @classmethod
@@ -36,6 +37,7 @@ class EmployeeUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     email: Optional[EmailStr] = None
     department: Optional[str] = Field(None, max_length=100)
+    is_team_leader: Optional[bool] = None
     active: Optional[bool] = None
 
     @field_validator("name")
@@ -62,6 +64,7 @@ class EmployeeBrief(BaseModel):
     name: str
     email: str
     department: Optional[str] = None
+    is_team_leader: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -71,6 +74,7 @@ class EmployeeResponse(BaseModel):
     name: str
     email: str
     department: Optional[str] = None
+    is_team_leader: bool = False
     active: bool
     created_at: datetime
 
@@ -170,6 +174,7 @@ class TaskResponse(BaseModel):
                     "name": emp.name,
                     "email": emp.email,
                     "department": emp.department,
+                    "is_team_leader": emp.is_team_leader,
                 } if emp else None,
                 "status": data.status,
                 "created_at": data.created_at,

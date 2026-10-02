@@ -9,7 +9,6 @@ import TaskDetailsModal from '../components/TaskDetailsModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { api } from '../services/api';
 import { Plus, Filter, RotateCcw, Search, LayoutGrid, List, X } from 'lucide-react';
-import { PREDEFINED_DEPARTMENTS } from '../constants/departments';
 
 export default function Dashboard({
   isCreateTaskOpen,
@@ -267,17 +266,23 @@ export default function Dashboard({
 
   const activeEmployees = employees.filter((e) => e.active);
 
-  // Collect distinct departments from predefined list, employees, and tasks
+  // Only offer department labels present in employee or task records.
   const availableDepartments = useMemo(() => {
-    const set = new Set(PREDEFINED_DEPARTMENTS);
+    const set = new Set();
     employees.forEach((e) => {
       if (e.department && e.department.trim()) set.add(e.department.trim());
     });
     tasks.forEach((t) => {
       if (t.department && t.department.trim()) set.add(t.department.trim());
     });
-    return Array.from(set);
+    return Array.from(set).sort((first, second) => first.localeCompare(second));
   }, [employees, tasks]);
+
+  useEffect(() => {
+    if (departmentFilter !== 'All' && !availableDepartments.includes(departmentFilter)) {
+      setDepartmentFilter('All');
+    }
+  }, [departmentFilter, availableDepartments]);
 
   // Determine last assigned employee ID from the latest task
   const lastAssignedId = tasks.length > 0 && tasks[0].assigned_to ? tasks[0].assigned_to.id : null;
@@ -417,6 +422,7 @@ export default function Dashboard({
         {viewMode === 'table' ? (
           <TaskTable
             tasks={filteredTasks}
+            hasAnyTasks={(stats?.total_tasks || 0) > 0}
             loading={loading}
             onViewTask={(task) => {
               setSelectedTask(task);

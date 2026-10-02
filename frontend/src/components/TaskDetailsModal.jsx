@@ -169,9 +169,9 @@ export default function TaskDetailsModal({ isOpen, task, onClose, onStatusUpdate
                     style={{
                       fontSize: '11px',
                       fontWeight: 600,
-                      color: '#3b82f6',
-                      background: '#eff6ff',
-                      border: '1px solid #dbeafe',
+                      color: 'var(--primary)',
+                      background: 'var(--primary-subtle)',
+                      border: '1px solid var(--primary-border)',
                       padding: '2px 8px',
                       borderRadius: '4px',
                     }}

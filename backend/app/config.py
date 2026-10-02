@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "sqlite:///./belvo.db"
+    DATABASE_URL: str
     FRONTEND_URL: str = "http://localhost:5173"
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
@@ -36,3 +36,8 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+
+
+

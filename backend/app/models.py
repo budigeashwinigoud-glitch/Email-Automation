@@ -10,6 +10,7 @@ class Employee(Base):
     name = Column(String(100), nullable=False)
     email = Column(String(150), unique=True, index=True, nullable=False)
     department = Column(String(100), nullable=True, index=True)
+    is_team_leader = Column(Boolean, default=False, nullable=False)
     active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

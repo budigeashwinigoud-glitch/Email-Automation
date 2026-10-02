@@ -1,8 +1,13 @@
+import os
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
+
+# Keep test startup isolated from a developer's or deployment's real database.
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from app.main import app
 from app.database import Base, get_db

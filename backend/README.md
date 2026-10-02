@@ -14,7 +14,7 @@ Production-ready REST API built with FastAPI and SQLAlchemy for the Belvo "Autom
 - **Framework**: FastAPI (Python 3.10+)
 - **ORM**: SQLAlchemy 2.0
 - **Validation**: Pydantic v2
-- **Database**: SQLite by default; MySQL supported for hosted/shared deployments
+- **Database**: PostgreSQL (Neon in this setup), configured with `DATABASE_URL`; SQLite remains available for tests
 - **Documentation**: Swagger UI (`/docs`) & ReDoc (`/redoc`)
 - **Testing**: Pytest & HTTPX TestClient
 
@@ -43,21 +43,15 @@ pip install -r requirements.txt
 
 ### 3. Configure Environment Variables
 
-Create `.env` based on `.env.example`:
+Create `backend/.env` based on `.env.example` and set your PostgreSQL connection details:
 
 ```env
-DATABASE_URL=sqlite:///./belvo.db
+DATABASE_URL=postgresql+psycopg2://username:password@host:5432/database?sslmode=require
 FRONTEND_URL=http://localhost:5173
-SEED_INITIAL_EMPLOYEES=true
+SEED_INITIAL_EMPLOYEES=false
 ```
 
-To use a hosted MySQL database, install the backend requirements and set `DATABASE_URL` in `backend/.env`:
-
-```env
-DATABASE_URL=mysql+pymysql://DB_USER:DB_PASSWORD@DB_HOST:3306/DB_NAME?charset=utf8mb4
-```
-
-Get the host, database name, username, and password from your MySQL provider. Create a dedicated database user, allow connections from the machine running the backend, and enable the provider's TLS/SSL requirement. If the password contains URL-reserved characters, percent-encode them in the URL. Keep `.env` private and set the same `DATABASE_URL` as a secret environment variable when deploying the backend. The MySQL server must be hosted or otherwise network-accessible; a MySQL server bound only to your own computer is not reachable from elsewhere. The frontend connects to the backend API, not directly to MySQL.
+Replace the placeholders with your provider's connection details. Keep real credentials in `.env`; do not commit them. If the password contains URL-reserved characters, percent-encode them.
 
 ### 4. Run Server
 
@@ -66,7 +60,7 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 The server will automatically:
-1. Initialize the configured database and create all tables on startup.
+1. Connect to the configured database and create missing tables on startup.
 2. Seed initial employees if the Employee table is empty.
 3. Serve OpenAPI documentation at: `http://localhost:8000/docs`.
 

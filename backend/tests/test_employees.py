@@ -5,12 +5,13 @@ def test_get_employees_empty(client):
 
 
 def test_create_employee(client):
-    payload = {"name": "Alice", "email": "alice@example.com"}
+    payload = {"name": "Alice", "email": "alice@example.com", "is_team_leader": True}
     response = client.post("/api/employees", json=payload)
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "Alice"
     assert data["email"] == "alice@example.com"
+    assert data["is_team_leader"] is True
     assert data["active"] is True
     assert "id" in data
     assert "created_at" in data
@@ -75,6 +76,14 @@ def test_update_employee(client, seed_employees):
     data = response.json()
     assert data["name"] == "Updated Name"
     assert data["email"] == "updated@example.com"
+
+
+def test_update_employee_team_leader_role(client, seed_employees):
+    emp_id = seed_employees[0].id
+    response = client.put(f"/api/employees/{emp_id}", json={"is_team_leader": True})
+
+    assert response.status_code == 200
+    assert response.json()["is_team_leader"] is True
 
 
 def test_update_employee_duplicate_email(client, seed_employees):

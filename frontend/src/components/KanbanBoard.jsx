@@ -100,9 +100,9 @@ export default function KanbanBoard({
                             style={{
                               fontSize: '10.5px',
                               fontWeight: 600,
-                              color: '#3b82f6',
-                              background: '#eff6ff',
-                              border: '1px solid #dbeafe',
+                              color: 'var(--primary)',
+                              background: 'var(--primary-subtle)',
+                              border: '1px solid var(--primary-border)',
                               padding: '1px 6px',
                               borderRadius: '4px',
                             }}

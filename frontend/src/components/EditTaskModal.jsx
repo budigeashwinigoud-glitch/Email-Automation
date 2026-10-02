@@ -213,11 +213,22 @@ export default function EditTaskModal({ isOpen, task, onClose, onSuccess }) {
                       {task.assigned_to.name} (Current - Inactive)
                     </option>
                   )}
-                  {activeEmployees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.email})
-                    </option>
-                  ))}
+                  {activeEmployees.some((employee) => employee.is_team_leader) && (
+                    <optgroup label="Team Leaders">
+                      {activeEmployees.filter((employee) => employee.is_team_leader).map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.name} ({emp.email})
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="Employees">
+                    {activeEmployees.filter((employee) => !employee.is_team_leader).map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.email})
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
 

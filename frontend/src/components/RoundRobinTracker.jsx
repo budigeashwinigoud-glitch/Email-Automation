@@ -84,7 +84,7 @@ export default function RoundRobinTracker({ employees = [], lastAssignedId = nul
                   style={{
                     background: colors.bg,
                     color: colors.text,
-                    border: `1.5px solid ${isNext ? '#2563eb' : colors.border}`,
+                    border: `1.5px solid ${isNext ? 'var(--primary)' : colors.border}`,
                   }}
                 >
                   {getInitials(emp.name)}

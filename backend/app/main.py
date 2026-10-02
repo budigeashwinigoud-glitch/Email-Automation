@@ -3,7 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from .config import settings
 from .database import engine, Base, SessionLocal
@@ -49,32 +49,24 @@ async def lifespan(app: FastAPI):
     # Create tables automatically on startup
     Base.metadata.create_all(bind=engine)
 
-    # Lightweight automatic migration for SQLite to ensure all columns exist
-    if engine.dialect.name == "sqlite":
-        with engine.connect() as conn:
-            try:
-                # Check employees table
-                res = conn.execute(text("PRAGMA table_info(employees)")).fetchall()
-                cols = [r[1] for r in res]
-                if cols and "department" not in cols:
-                    conn.execute(text("ALTER TABLE employees ADD COLUMN department VARCHAR(100)"))
-                    conn.commit()
-
-                # Check tasks table
-                res = conn.execute(text("PRAGMA table_info(tasks)")).fetchall()
-                cols = [r[1] for r in res]
-                if cols and "department" not in cols:
-                    conn.execute(text("ALTER TABLE tasks ADD COLUMN department VARCHAR(100)"))
-                    conn.commit()
-
-                # Check round_robin_state table
-                res = conn.execute(text("PRAGMA table_info(round_robin_state)")).fetchall()
-                cols = [r[1] for r in res]
-                if cols and "department" not in cols:
-                    conn.execute(text("ALTER TABLE round_robin_state ADD COLUMN department VARCHAR(100)"))
-                    conn.commit()
-            except Exception:
-                pass
+    # Keep existing databases in sync without altering or deleting existing rows.
+    migrations = {
+        "employees": {
+            "department": "VARCHAR(100)",
+            "is_team_leader": "BOOLEAN NOT NULL DEFAULT FALSE",
+        },
+        "tasks": {"department": "VARCHAR(100)"},
+        "round_robin_state": {"department": "VARCHAR(100)"},
+    }
+    with engine.begin() as conn:
+        inspector = inspect(conn)
+        for table_name, columns in migrations.items():
+            existing_columns = {column["name"] for column in inspector.get_columns(table_name)}
+            for column_name, column_type in columns.items():
+                if column_name not in existing_columns:
+                    conn.execute(text(
+                        f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                    ))
 
     # Seed initial employee records if database is fresh
     db = SessionLocal()

@@ -4,6 +4,7 @@ import { getAvatarColor, getInitials } from '../utils/colors';
 
 export default function TaskTable({
   tasks,
+  hasAnyTasks = false,
   loading,
   onViewTask,
   onEditTask,
@@ -28,9 +29,13 @@ export default function TaskTable({
         <div className="empty-state-icon">
           <Layers size={28} />
         </div>
-        <div className="empty-state-title">No matching tasks found</div>
+        <div className="empty-state-title">
+          {hasAnyTasks ? 'No matching tasks found' : 'No tasks created yet'}
+        </div>
         <p style={{ fontSize: '13px', maxWidth: '380px', margin: '0 auto', color: 'var(--text-muted)' }}>
-          No tasks match your selected filter criteria. Try changing filters, searching for another keyword, or create a new task.
+          {hasAnyTasks
+            ? 'No tasks match your selected filter criteria. Try changing filters or searching for another keyword.'
+            : 'Create a task and assign it to an employee to see it in the task inventory.'}
         </p>
       </div>
     );
@@ -124,9 +129,9 @@ export default function TaskTable({
                         display: 'inline-block',
                         fontSize: '11px',
                         fontWeight: 600,
-                        color: '#3b82f6',
-                        background: '#eff6ff',
-                        border: '1px solid #dbeafe',
+                        color: 'var(--primary)',
+                        background: 'var(--primary-subtle)',
+                        border: '1px solid var(--primary-border)',
                         padding: '2px 8px',
                         borderRadius: '4px',
                         whiteSpace: 'nowrap',

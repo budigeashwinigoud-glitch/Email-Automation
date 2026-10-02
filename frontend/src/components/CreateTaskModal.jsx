@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Sparkles, User, AlertCircle, Building2, Send, Save, Calendar, CheckCircle2, Clock } from 'lucide-react';
 import { api } from '../services/api';
-import { PREDEFINED_DEPARTMENTS } from '../constants/departments';
 
 export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees = [] }) {
   const [title, setTitle] = useState('');
@@ -22,16 +21,16 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
   // Compute final effective department
   const effectiveDepartment = deptSelect === 'Other' ? customDept.trim() : deptSelect.trim();
 
-  // Combine predefined departments with any custom ones already in employees
+  // Only offer departments that currently have active employees to assign.
   const allDepartmentsList = useMemo(() => {
-    const set = new Set(PREDEFINED_DEPARTMENTS);
-    employees.forEach((emp) => {
+    const set = new Set();
+    activeEmployees.forEach((emp) => {
       if (emp.department && emp.department.trim()) {
         set.add(emp.department.trim());
       }
     });
-    return Array.from(set);
-  }, [employees]);
+    return Array.from(set).sort((first, second) => first.localeCompare(second));
+  }, [activeEmployees]);
 
   // Filter employees for manual selection based on chosen department
   const filteredEmployeesForManual = useMemo(() => {
@@ -41,6 +40,9 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
       (e) => e.department && e.department.toLowerCase() === d
     );
   }, [activeEmployees, effectiveDepartment]);
+
+  const manualTeamLeaders = filteredEmployeesForManual.filter((employee) => employee.is_team_leader);
+  const manualEmployees = filteredEmployeesForManual.filter((employee) => !employee.is_team_leader);
 
   useEffect(() => {
     if (isOpen) {
@@ -299,11 +301,24 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
                       required
                     >
                       <option value="">-- Choose Employee Assignee --</option>
-                      {filteredEmployeesForManual.map((emp) => (
-                        <option key={emp.id} value={emp.id}>
-                          {emp.name} — {emp.email} {emp.department ? `[${emp.department}]` : ''}
-                        </option>
-                      ))}
+                      {manualTeamLeaders.length > 0 && (
+                        <optgroup label="Team Leaders">
+                          {manualTeamLeaders.map((emp) => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.name} — {emp.email}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {manualEmployees.length > 0 && (
+                        <optgroup label="Employees">
+                          {manualEmployees.map((emp) => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.name} — {emp.email}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   )}
                 </div>

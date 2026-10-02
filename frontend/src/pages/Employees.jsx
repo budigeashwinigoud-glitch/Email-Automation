@@ -30,6 +30,7 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
   const [newEmail, setNewEmail] = useState('');
   const [newDepartment, setNewDepartment] = useState(''); // dropdown selection
   const [newCustomDepartment, setNewCustomDepartment] = useState(''); // custom input when 'Other' selected
+  const [newIsTeamLeader, setNewIsTeamLeader] = useState(false);
   const [submittingAdd, setSubmittingAdd] = useState(false);
   const [addError, setAddError] = useState('');
 
@@ -38,6 +39,7 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
   const [editEmail, setEditEmail] = useState('');
   const [editDepartment, setEditDepartment] = useState(''); // dropdown selection
   const [editCustomDepartment, setEditCustomDepartment] = useState(''); // custom input when 'Other' selected
+  const [editIsTeamLeader, setEditIsTeamLeader] = useState(false);
   const [editActive, setEditActive] = useState(true);
   const [submittingEdit, setSubmittingEdit] = useState(false);
   const [editError, setEditError] = useState('');
@@ -70,14 +72,26 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
     loadData();
   }, [loadData, refreshTrigger]);
 
-  // Distinct departments combining predefined list with any custom ones in DB
+  // Directory filters should only offer department labels present in employee records.
   const availableDepartments = useMemo(() => {
-    const set = new Set(PREDEFINED_DEPARTMENTS);
-    employees.forEach((e) => {
-      if (e.department && e.department.trim()) set.add(e.department.trim());
-    });
-    return Array.from(set);
+    const departments = new Set(
+      employees
+        .map((employee) => employee.department?.trim())
+        .filter(Boolean)
+    );
+    return Array.from(departments).sort((first, second) => first.localeCompare(second));
   }, [employees]);
+
+  const departmentOptions = useMemo(
+    () => Array.from(new Set([...PREDEFINED_DEPARTMENTS, ...availableDepartments])),
+    [availableDepartments]
+  );
+
+  useEffect(() => {
+    if (departmentFilter !== 'All' && !availableDepartments.includes(departmentFilter)) {
+      setDepartmentFilter('All');
+    }
+  }, [departmentFilter, availableDepartments]);
 
   // Client search
   const filteredEmployees = useMemo(() => {
@@ -94,6 +108,10 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
         (e.department && e.department.toLowerCase().includes(q))
     );
   }, [employees, searchQuery, departmentFilter]);
+
+  const teamLeaders = filteredEmployees.filter((employee) => employee.is_team_leader);
+  const regularEmployees = filteredEmployees.filter((employee) => !employee.is_team_leader);
+  const directoryEmployees = [...teamLeaders, ...regularEmployees];
 
   // Employee workload mapping
   const employeeTaskStats = useMemo(() => {
@@ -128,18 +146,20 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
         name: newName.trim(),
         email: newEmail.trim(),
         department: effectiveDept || null,
+        is_team_leader: newIsTeamLeader,
       });
       // Optimistic update
       setEmployees((prev) => [...prev, created]);
       showToast(
         'success',
-        'Employee Registered',
-        `${created.name} (${created.email}) added to round-robin rotation.`
+        created.is_team_leader ? 'Team Leader Registered' : 'Employee Registered',
+        `${created.name} (${created.email}) added to the directory.`
       );
       setNewName('');
       setNewEmail('');
       setNewDepartment('');
       setNewCustomDepartment('');
+      setNewIsTeamLeader(false);
       setIsCreateOpen(false);
       loadData(true);
     } catch (err) {
@@ -164,6 +184,7 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
       setEditCustomDepartment(emp.department);
     }
     setEditActive(emp.active);
+    setEditIsTeamLeader(Boolean(emp.is_team_leader));
     setEditError('');
     setIsEditOpen(true);
   };
@@ -190,6 +211,7 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
         name: editName.trim(),
         email: editEmail.trim(),
         department: effectiveDept || null,
+        is_team_leader: editIsTeamLeader,
         active: editActive,
       });
       showToast('success', 'Employee Updated', `${updated.name}'s details were updated.`);
@@ -392,13 +414,20 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
         ) : viewMode === 'grid' ? (
           /* Grid Cards View */
           <div className="employee-grid">
-            {filteredEmployees.map((emp) => {
+            {directoryEmployees.map((emp, index) => {
               const colors = getAvatarColor(emp.name, emp.id);
               const stats = employeeTaskStats[emp.id] || { pending: 0, sent: 0, done: 0 };
               const totalTasks = stats.pending + stats.sent + stats.done;
 
               return (
-                <div key={emp.id} className="employee-card">
+                <React.Fragment key={emp.id}>
+                {(index === 0 || emp.is_team_leader !== directoryEmployees[index - 1].is_team_leader) && (
+                  <div className="employee-section-heading">
+                    <strong>{emp.is_team_leader ? 'Team Leaders' : 'Employees'}</strong>
+                    <span>{emp.is_team_leader ? teamLeaders.length : regularEmployees.length}</span>
+                  </div>
+                )}
+                <div className="employee-card">
                   <div className="employee-card-header">
                     <div
                       className="employee-card-avatar"
@@ -430,9 +459,9 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                               display: 'inline-block',
                               fontSize: '11px',
                               fontWeight: 600,
-                              color: '#3b82f6',
-                              background: '#eff6ff',
-                              border: '1px solid #dbeafe',
+                              color: 'var(--primary)',
+                              background: 'var(--primary-subtle)',
+                              border: '1px solid var(--primary-border)',
                               padding: '1px 7px',
                               borderRadius: '4px',
                             }}
@@ -530,6 +559,7 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                     </div>
                   </div>
                 </div>
+                </React.Fragment>
               );
             })}
           </div>
@@ -551,12 +581,20 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                 </tr>
               </thead>
               <tbody>
-                {filteredEmployees.map((emp) => {
+                {directoryEmployees.map((emp, index) => {
                   const colors = getAvatarColor(emp.name, emp.id);
                   const stats = employeeTaskStats[emp.id] || { pending: 0, sent: 0, done: 0 };
 
                   return (
-                    <tr key={emp.id}>
+                    <React.Fragment key={emp.id}>
+                    {(index === 0 || emp.is_team_leader !== directoryEmployees[index - 1].is_team_leader) && (
+                      <tr className="employee-section-row">
+                        <td colSpan={9}>
+                          {emp.is_team_leader ? `Team Leaders (${teamLeaders.length})` : `Employees (${regularEmployees.length})`}
+                        </td>
+                      </tr>
+                    )}
+                    <tr>
                       <td>
                         <div className="user-badge">
                           <div
@@ -580,9 +618,9 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                               display: 'inline-block',
                               fontSize: '11px',
                               fontWeight: 600,
-                              color: '#3b82f6',
-                              background: '#eff6ff',
-                              border: '1px solid #dbeafe',
+                              color: 'var(--primary)',
+                              background: 'var(--primary-subtle)',
+                              border: '1px solid var(--primary-border)',
                               padding: '1px 7px',
                               borderRadius: '4px',
                             }}
@@ -641,6 +679,7 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                         </div>
                       </td>
                     </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -714,7 +753,7 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                     }}
                   >
                     <option value="">-- Select Department --</option>
-                    {availableDepartments.map((d) => (
+                    {departmentOptions.map((d) => (
                       <option key={d} value={d}>
                         {d}
                       </option>
@@ -738,6 +777,17 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                   <div className="form-help">
                     Select the employee's department, or choose "Other" to enter a new one manually.
                   </div>
+                </div>
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={newIsTeamLeader}
+                      onChange={(e) => setNewIsTeamLeader(e.target.checked)}
+                    />
+                    Team Leader
+                  </label>
+                  <div className="form-help">Team leaders appear in their own directory section and can be selected for tasks.</div>
                 </div>
               </div>
               <div className="modal-footer">
@@ -809,7 +859,7 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                     }}
                   >
                     <option value="">-- Select Department --</option>
-                    {availableDepartments.map((d) => (
+                    {departmentOptions.map((d) => (
                       <option key={d} value={d}>
                         {d}
                       </option>
@@ -829,6 +879,16 @@ export default function Employees({ isCreateOpen, setIsCreateOpen, showToast, re
                       />
                     </div>
                   )}
+                </div>
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={editIsTeamLeader}
+                      onChange={(e) => setEditIsTeamLeader(e.target.checked)}
+                    />
+                    Team Leader
+                  </label>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Rotation Status</label>
