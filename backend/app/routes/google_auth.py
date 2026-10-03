@@ -29,15 +29,15 @@ REDIRECT_URI = "http://localhost:8000/api/auth/google/callback"
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 
-CLIENT_FILES = list(BASE_DIR.glob("client_secret*.json"))
+def get_client_file():
+    client_files = list(BASE_DIR.glob("client_secret*.json"))
 
-if not CLIENT_FILES:
-    raise FileNotFoundError(
-        "Google OAuth client JSON file was not found in the backend folder."
-    )
+    if not client_files:
+        raise FileNotFoundError(
+            "Google OAuth client JSON file was not found in the backend folder."
+        )
 
-
-CLIENT_FILE = CLIENT_FILES[0]
+    return client_files[0]
 
 
 TOKEN_FILE = BASE_DIR / "token.json"
@@ -49,7 +49,7 @@ def google_login():
     Start the Google OAuth authorization flow.
     """
 
-    with open(CLIENT_FILE, "r", encoding="utf-8") as file:
+    with open(get_client_file(), "r", encoding="utf-8") as file:
         client_config = json.load(file)
 
     flow = Flow.from_client_config(
