@@ -9,7 +9,7 @@ from .config import settings
 from .database import engine, Base, SessionLocal
 from .seed import seed_initial_data
 from .services.worker import process_pending_tasks
-from .routes import employees, tasks, dashboard
+from .routes import employees, tasks, dashboard, google_auth
 
 logger = logging.getLogger("belvo.worker")
 
@@ -115,6 +115,7 @@ app.add_middleware(
 app.include_router(employees.router)
 app.include_router(tasks.router)
 app.include_router(dashboard.router)
+app.include_router(google_auth.router)
 
 
 @app.get("/", tags=["Health"])
