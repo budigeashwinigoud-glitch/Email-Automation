@@ -94,7 +94,7 @@ class TaskCreate(BaseModel):
     priority: PriorityType
     due_date: date
     department: Optional[str] = Field(None, max_length=100)
-    assignee: Union[int, Literal["auto"], str] = Field(..., description="'auto' or employee ID")
+    assignee: Union[int, Literal["auto", "all"], str] = Field(..., description="'auto', 'all', or employee ID")
 
     @field_validator("title", "description")
     @classmethod
@@ -108,12 +108,12 @@ class TaskCreate(BaseModel):
     @classmethod
     def validate_assignee(cls, v: Union[int, str]) -> Union[int, str]:
         if isinstance(v, str):
-            if v.strip().lower() == "auto":
-                return "auto"
+            if v.strip().lower() in ("auto", "all"):
+                return v.strip().lower()
             try:
                 return int(v)
             except ValueError:
-                raise ValueError("Assignee must be 'auto' or a valid integer employee ID")
+                raise ValueError("Assignee must be 'auto', 'all', or a valid integer employee ID")
         return v
 
 

@@ -39,6 +39,8 @@ export default function Dashboard({
   // Send Email State
   const [taskToSendEmail, setTaskToSendEmail] = useState(null);
   const [isSendEmailConfirmOpen, setIsSendEmailConfirmOpen] = useState(false);
+  const [taskToSendAll, setTaskToSendAll] = useState(null);
+  const [isSendAllConfirmOpen, setIsSendAllConfirmOpen] = useState(false);
   const [sendingTaskIds, setSendingTaskIds] = useState([]);
   const [failedTaskIds, setFailedTaskIds] = useState([]);
 
@@ -200,6 +202,55 @@ export default function Dashboard({
   const handleInitiateSendEmail = (task) => {
     setTaskToSendEmail(task);
     setIsSendEmailConfirmOpen(true);
+  };
+
+  const handleInitiateSendEmailToAll = (task) => {
+    setTaskToSendAll(task);
+    setIsSendAllConfirmOpen(true);
+  };
+
+  const handleConfirmSendEmailToAll = async () => {
+    if (!taskToSendAll) return;
+    const target = taskToSendAll;
+    setIsSendAllConfirmOpen(false);
+    setTaskToSendAll(null);
+
+    setSendingTaskIds((prev) => [...prev, target.id]);
+    setFailedTaskIds((prev) => prev.filter((id) => id !== target.id));
+
+    try {
+      const updatedTask = await api.sendTaskEmailToAll(target.id, false);
+
+      setTasks((prev) =>
+        prev.map((t) => (t.id === target.id ? updatedTask : t))
+      );
+
+      setStats((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          pending_tasks: Math.max(0, (prev.pending_tasks || 0) - (target.status === 'pending' ? 1 : 0)),
+          sent_tasks: (prev.sent_tasks || 0) + (target.status === 'pending' ? 1 : 0),
+        };
+      });
+
+      showToast(
+        'success',
+        'Broadcast Dispatched',
+        `Task #${target.id} was dispatched by email to all active employees.`
+      );
+
+      loadDashboardData(true);
+    } catch (err) {
+      setFailedTaskIds((prev) => [...prev, target.id]);
+      showToast(
+        'error',
+        'Broadcast Failed',
+        err.message || 'Failed to dispatch emails to all employees.'
+      );
+    } finally {
+      setSendingTaskIds((prev) => prev.filter((id) => id !== target.id));
+    }
   };
 
   const handleConfirmSendEmail = async () => {
@@ -438,6 +489,7 @@ export default function Dashboard({
             }}
             onQuickStatusChange={handleQuickStatusChange}
             onSendEmail={handleInitiateSendEmail}
+            onSendEmailToAll={handleInitiateSendEmailToAll}
             sendingTaskIds={sendingTaskIds}
             failedTaskIds={failedTaskIds}
           />
@@ -458,6 +510,7 @@ export default function Dashboard({
             }}
             onQuickStatusChange={handleQuickStatusChange}
             onSendEmail={handleInitiateSendEmail}
+            onSendEmailToAll={handleInitiateSendEmailToAll}
             sendingTaskIds={sendingTaskIds}
             failedTaskIds={failedTaskIds}
           />
@@ -482,6 +535,7 @@ export default function Dashboard({
           setIsEditOpen(true);
         }}
         onSendEmail={handleInitiateSendEmail}
+        onSendEmailToAll={handleInitiateSendEmailToAll}
       />
 
       <EditTaskModal
@@ -523,6 +577,24 @@ export default function Dashboard({
         onCancel={() => {
           setIsSendEmailConfirmOpen(false);
           setTaskToSendEmail(null);
+        }}
+        isDanger={false}
+      />
+
+      {/* Send To All Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isSendAllConfirmOpen}
+        title="Broadcast Task to All Employees"
+        message={
+          taskToSendAll
+            ? `Are you sure you want to broadcast task #${taskToSendAll.id} ("${taskToSendAll.title}") to all active employees via email?`
+            : ''
+        }
+        confirmText="Send to All Employees"
+        onConfirm={handleConfirmSendEmailToAll}
+        onCancel={() => {
+          setIsSendAllConfirmOpen(false);
+          setTaskToSendAll(null);
         }}
         isDanger={false}
       />

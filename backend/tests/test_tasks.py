@@ -404,4 +404,54 @@ def test_send_email_smtp_failure_preserves_pending(client, seed_employees, monke
     assert persisted["status"] == "pending"
     assert persisted["sent_at"] is None
 
+def test_create_task_assignee_all(client, seed_employees):
+    """Assignee='all' creates a task for every active employee."""
+    payload = {
+        "title": "Company-wide Announcement Task",
+        "description": "All hands review needed",
+        "priority": "High",
+        "due_date": "2026-11-15",
+        "assignee": "all"
+    }
+    response = client.post("/api/tasks", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "Company-wide Announcement Task"
 
+    # Verify tasks created for all active seed employees (5 active)
+    all_tasks = client.get("/api/tasks").json()
+    created = [t for t in all_tasks if t["title"] == "Company-wide Announcement Task"]
+    assert len(created) == 5
+    assigned_ids = {t["assigned_to"]["id"] for t in created}
+    assert assigned_ids == {e.id for e in seed_employees}
+
+
+def test_send_email_to_all(client, seed_employees, monkeypatch):
+    """Controlled trigger to deliver task email to all active employees."""
+    sent_recipients = []
+
+    def mock_send_multiple(t, employees):
+        for e in employees:
+            sent_recipients.append(e.email)
+        return {"status": "delivered", "recipients": sent_recipients, "total_sent": len(employees)}
+
+    monkeypatch.setattr("app.routes.tasks.send_task_email_to_multiple", mock_send_multiple)
+
+    emp = seed_employees[0]
+    task = client.post("/api/tasks", json={
+        "title": "Broadcast Email Task",
+        "description": "Send to all active staff",
+        "priority": "Medium",
+        "due_date": "2026-11-20",
+        "assignee": emp.id
+    }).json()
+
+    res = client.post(f"/api/tasks/{task['id']}/send-all")
+    assert res.status_code == 200
+    updated = res.json()
+    assert updated["status"] == "sent"
+    assert updated["sent_at"] is not None
+
+    # Verify all 5 active seed employees received the email
+    assert len(sent_recipients) == 5
+    assert set(sent_recipients) == {e.email for e in seed_employees}

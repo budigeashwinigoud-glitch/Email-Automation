@@ -7,7 +7,7 @@ load_dotenv()
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from fastapi import HTTPException, status
 
@@ -294,4 +294,48 @@ Best regards,
         "status": "delivered",
         "recipient": recipient_email,
         "subject": subject,
+    }
+
+def send_task_email_to_multiple(task: Task, employees: List[Employee]) -> Dict[str, Any]:
+    """
+    Delivers task notification email to multiple employees.
+    """
+    if not employees:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No employees provided to send task email.",
+        )
+
+    if not is_email_service_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Email service is not configured. "
+                "Please configure GOOGLE_CLIENT_ID, "
+                "GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, "
+                "and GOOGLE_SENDER_EMAIL."
+            ),
+        )
+
+    successful = []
+    failed = []
+
+    for employee in employees:
+        try:
+            send_task_email(task, employee)
+            successful.append(employee.email)
+        except Exception as exc:
+            failed.append({"email": employee.email, "error": str(exc)})
+
+    if not successful and failed:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to deliver email to recipients: {failed[0]['error']}",
+        )
+
+    return {
+        "status": "delivered" if not failed else "partial",
+        "recipients": successful,
+        "failed": failed,
+        "total_sent": len(successful),
     }

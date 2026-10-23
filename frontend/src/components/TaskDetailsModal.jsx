@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { X, Calendar, User, Mail, Clock, Send, CheckCircle2, AlertCircle, Edit2 } from 'lucide-react';
+import { X, Calendar, User, Users, Mail, Clock, Send, CheckCircle2, AlertCircle, Edit2 } from 'lucide-react';
 import { api } from '../services/api';
 import { getAvatarColor, getInitials } from '../utils/colors';
 
-export default function TaskDetailsModal({ isOpen, task, onClose, onStatusUpdated, onOpenEdit, onSendEmail }) {
+export default function TaskDetailsModal({ isOpen, task, onClose, onStatusUpdated, onOpenEdit, onSendEmail, onSendEmailToAll }) {
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState('');
 
@@ -232,6 +232,21 @@ export default function TaskDetailsModal({ isOpen, task, onClose, onStatusUpdate
               >
                 <Mail size={13} />
                 <span>Send Email</span>
+              </button>
+            )}
+            {onSendEmailToAll && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  onClose();
+                  onSendEmailToAll(task);
+                }}
+                disabled={updating}
+                title="Broadcast this task via email to all active employees"
+                style={{ color: '#059669', borderColor: '#a7f3d0' }}
+              >
+                <Users size={13} />
+                <span>Send to All</span>
               </button>
             )}
             {task.status === 'sent' && (

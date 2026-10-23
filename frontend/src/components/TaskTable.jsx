@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, Edit2, Trash2, Calendar, Layers, Mail, CheckCircle2, Loader2, RotateCcw } from 'lucide-react';
+import { Eye, Edit2, Trash2, Calendar, Layers, Mail, Users, CheckCircle2, Loader2, RotateCcw } from 'lucide-react';
 import { getAvatarColor, getInitials } from '../utils/colors';
 
 export default function TaskTable({
@@ -11,6 +11,7 @@ export default function TaskTable({
   onDeleteTask,
   onQuickStatusChange,
   onSendEmail,
+  onSendEmailToAll,
   sendingTaskIds = [],
   failedTaskIds = [],
 }) {
@@ -226,6 +227,16 @@ export default function TaskTable({
                 {/* Actions */}
                 <td style={{ textAlign: 'right' }}>
                   <div className="table-actions" style={{ justifyContent: 'flex-end', display: 'flex', gap: '4px' }}>
+                    {onSendEmailToAll && (
+                      <button
+                        className="btn-icon"
+                        onClick={() => onSendEmailToAll(task)}
+                        title="Broadcast task email to all active employees"
+                        style={{ color: '#059669' }}
+                      >
+                        <Users size={15} />
+                      </button>
+                    )}
                     <button
                       className="btn-icon"
                       onClick={() => onViewTask(task)}

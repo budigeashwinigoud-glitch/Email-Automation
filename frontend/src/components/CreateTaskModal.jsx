@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Sparkles, User, AlertCircle, Building2, Send, Save, Calendar, CheckCircle2, Clock } from 'lucide-react';
+import { X, Sparkles, User, Users, AlertCircle, Building2, Send, Save, Calendar, CheckCircle2, Clock } from 'lucide-react';
 import { api } from '../services/api';
 
 export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees = [] }) {
@@ -81,7 +81,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
       return false;
     }
     if (!assignmentMode) {
-      setError('Please select an assignment strategy: Auto Round-Robin or Manual Selection.');
+      setError('Please select an assignment strategy: Auto Round-Robin, Manual Selection, or All Employees.');
       return false;
     }
     if (assignmentMode === 'manual' && !manualAssignee) {
@@ -108,6 +108,8 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
         assignee:
           assignmentMode === 'auto'
             ? 'auto'
+            : assignmentMode === 'all'
+            ? 'all'
             : manualAssignee,
       };
 
@@ -120,8 +122,10 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
           // Show sending state
           setSubmittingAction('send');
 
-          // Send email immediately
-          const sentTask = await api.sendTaskEmail(createdTask.id);
+          // Send email immediately (single assignee or broadcast to all)
+          const sentTask = assignmentMode === 'all'
+            ? await api.sendTaskEmailToAll(createdTask.id, Boolean(effectiveDepartment))
+            : await api.sendTaskEmail(createdTask.id);
 
           // Email sent successfully
           onClose();
@@ -295,6 +299,27 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
                         <div className="radio-inner" />
                       </div>
                     </div>
+
+                    <div
+                      className={`assignment-card ${assignmentMode === 'all' ? 'selected' : ''}`}
+                      onClick={() => {
+                        setAssignmentMode('all');
+                        setError('');
+                      }}
+                    >
+                      <div className="assignment-card-icon all-icon" style={{ background: '#ecfdf5', color: '#059669' }}>
+                        <Users size={18} />
+                      </div>
+                      <div className="assignment-card-content">
+                        <div className="assignment-card-title">All Employees (Broadcast)</div>
+                        <div className="assignment-card-desc">
+                          Create tasks and send notifications to all active employees.
+                        </div>
+                      </div>
+                      <div className="assignment-card-radio">
+                        <div className="radio-inner" />
+                      </div>
+                    </div>
                   </div>
 
                   {assignmentMode === 'auto' && (
@@ -303,6 +328,17 @@ export default function CreateTaskModal({ isOpen, onClose, onSuccess, employees 
                       <div>
                         <strong>Cyclic Rotation Active:</strong> The task will be assigned to the next eligible employee{' '}
                         {effectiveDepartment ? <span>in <strong>"{effectiveDepartment}"</strong></span> : 'in the company rotation'}.
+                      </div>
+                    </div>
+                  )}
+
+                  {assignmentMode === 'all' && (
+                    <div className="strategy-info-banner" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534' }}>
+                      <Users size={16} color="#16a34a" style={{ flexShrink: 0 }} />
+                      <div>
+                        <strong>Broadcast Mode:</strong> This task will be assigned to all{' '}
+                        <strong>{filteredEmployeesForManual.length}</strong> active employee{filteredEmployeesForManual.length === 1 ? '' : 's'}{' '}
+                        {effectiveDepartment ? <span>in <strong>"{effectiveDepartment}"</strong></span> : 'across the organization'}.
                       </div>
                     </div>
                   )}

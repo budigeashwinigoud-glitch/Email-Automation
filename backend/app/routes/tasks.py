@@ -7,7 +7,7 @@ from ..database import get_db
 from ..models import Task, Employee
 from ..schemas import TaskCreate, TaskUpdate, TaskStatusUpdate, TaskResponse
 from ..services.assignment import get_next_round_robin_employee
-from ..services.email import send_task_email, is_email_service_configured
+from ..services.email import send_task_email, send_task_email_to_multiple, is_email_service_configured
 from ..services.worker import process_pending_tasks
 
 router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
@@ -25,6 +25,18 @@ def create_task(
     """
     if payload.assignee == "auto":
         assigned_employee = get_next_round_robin_employee(db, department=payload.department)
+        target_employees = [assigned_employee]
+    elif payload.assignee == "all":
+        query = db.query(Employee).filter(Employee.active == True)
+        if payload.department:
+            query = query.filter(Employee.department == payload.department)
+        target_employees = query.order_by(Employee.id.asc()).all()
+        if not target_employees:
+            dept_msg = f" in department '{payload.department}'" if payload.department else ""
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No active employees available{dept_msg} to assign."
+            )
     else:
         # Manual assignment to a specific employee ID
         employee = db.query(Employee).filter(Employee.id == payload.assignee).first()
@@ -38,29 +50,30 @@ def create_task(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Employee is inactive and cannot receive new tasks."
             )
-        assigned_employee = employee
+        target_employees = [employee]
 
-    task_department = payload.department or (assigned_employee.department if assigned_employee else None)
+    created_tasks = []
+    task_department = payload.department
+    for emp in target_employees:
+        t_dept = task_department or emp.department
+        new_task = Task(
+            title=payload.title,
+            description=payload.description,
+            priority=payload.priority,
+            assigned_to=emp.id,
+            department=t_dept,
+            status="pending",
+            due_date=payload.due_date,
+        )
+        db.add(new_task)
+        created_tasks.append(new_task)
 
-    new_task = Task(
-        title=payload.title,
-        description=payload.description,
-        priority=payload.priority,
-        assigned_to=assigned_employee.id,
-        department=task_department,
-        status="pending",
-        due_date=payload.due_date,
-    )
-    db.add(new_task)
     db.commit()
-    db.refresh(new_task)
-    # Ensure relationship is loaded
-    db.refresh(new_task, ["assigned_employee"])
+    for t in created_tasks:
+        db.refresh(t)
+        db.refresh(t, ["assigned_employee"])
 
-    # Leave tasks in pending status until the explicit send endpoint or the
-    # scheduled worker confirms successful email delivery. This preserves the
-    # intended task lifecycle and prevents accidental "silent sends" on create.
-    return new_task
+    return created_tasks[0]
 
 
 @router.get("", response_model=List[TaskResponse])
@@ -280,6 +293,55 @@ def send_task_email_endpoint(
     send_task_email(task, employee)
 
     # Only after successful delivery, update status and sent_at
+    task.status = "sent"
+    task.sent_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(task)
+    db.refresh(task, ["assigned_employee"])
+    return task
+
+
+@router.post("/{task_id}/send-all", response_model=TaskResponse)
+def send_task_email_to_all_endpoint(
+    task_id: int,
+    department_only: bool = Query(False, description="Send only to active employees in task department"),
+    db: Session = Depends(get_db)
+):
+    """
+    Controlled manual trigger to deliver a task email to ALL active employees.
+    The task moves from 'pending' to 'sent' after the email service confirms successful delivery.
+    """
+    task = (
+        db.query(Task)
+        .options(joinedload(Task.assigned_employee))
+        .filter(Task.id == task_id)
+        .first()
+    )
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Task with ID {task_id} not found."
+        )
+
+    if task.status == "done":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Task has already been completed."
+        )
+
+    query = db.query(Employee).filter(Employee.active == True)
+    if department_only and task.department:
+        query = query.filter(Employee.department == task.department)
+
+    active_employees = query.all()
+    if not active_employees:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active employees available to receive task email."
+        )
+
+    send_task_email_to_multiple(task, active_employees)
+
     task.status = "sent"
     task.sent_at = datetime.now(timezone.utc)
     db.commit()

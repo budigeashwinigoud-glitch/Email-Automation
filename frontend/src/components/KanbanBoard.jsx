@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, Send, CheckCircle2, Calendar, Edit2, Trash2, Mail, Loader2, RotateCcw } from 'lucide-react';
+import { Clock, Send, CheckCircle2, Calendar, Edit2, Trash2, Mail, Users, Loader2, RotateCcw } from 'lucide-react';
 import { getAvatarColor, getInitials } from '../utils/colors';
 
 export default function KanbanBoard({
@@ -9,6 +9,7 @@ export default function KanbanBoard({
   onDeleteTask,
   onQuickStatusChange,
   onSendEmail,
+  onSendEmailToAll,
   sendingTaskIds = [],
   failedTaskIds = [],
 }) {
@@ -197,6 +198,16 @@ export default function KanbanBoard({
                           >
                             {col.nextAction.icon}
                             <span>{col.nextAction.label}</span>
+                          </button>
+                        )}
+                        {onSendEmailToAll && (
+                          <button
+                            className="btn-icon"
+                            onClick={() => onSendEmailToAll(task)}
+                            title="Broadcast task email to all active employees"
+                            style={{ padding: '4px', color: '#059669' }}
+                          >
+                            <Users size={13} />
                           </button>
                         )}
                         <button

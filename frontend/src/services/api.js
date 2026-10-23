@@ -143,6 +143,11 @@ export const api = {
       method: 'POST',
     }),
 
+  sendTaskEmailToAll: (taskId, departmentOnly = false) =>
+    request(`/api/tasks/${taskId}/send-all?department_only=${departmentOnly}`, {
+      method: 'POST',
+    }),
+
   // --------------------------------------------------------------------------
   // Dashboard API
   // --------------------------------------------------------------------------
