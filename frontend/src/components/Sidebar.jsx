@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckSquare, Users, Layers, ExternalLink, Sparkles } from 'lucide-react';
+import { CheckSquare, Users, Layers, ExternalLink, Sparkles, Shield } from 'lucide-react';
 
 export default function Sidebar({
   currentTab,
@@ -8,6 +8,7 @@ export default function Sidebar({
   setIsOpen,
   pendingCount = 0,
   employeeCount = 0,
+  onOpenPrivacy,
 }) {
   return (
     <>
@@ -59,19 +60,39 @@ export default function Sidebar({
         </nav>
 
         <div className="sidebar-footer">
-          <div>
-            <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#e2e8f0' }}>API Engine</div>
-            <div style={{ fontSize: '10.5px', color: '#64748b' }}>Swagger Documentation</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div>
+              <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#e2e8f0' }}>API Engine</div>
+              <div style={{ fontSize: '10.5px', color: '#64748b' }}>Swagger Documentation</div>
+            </div>
+            <a
+              href="http://localhost:8000/docs"
+              target="_blank"
+              rel="noreferrer"
+              title="Open Interactive FastAPI Documentation"
+              style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', padding: '6px' }}
+            >
+              <ExternalLink size={15} />
+            </a>
           </div>
-          <a
-            href="http://localhost:8000/docs"
-            target="_blank"
-            rel="noreferrer"
-            title="Open Interactive FastAPI Documentation"
-            style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', padding: '6px' }}
-          >
-            <ExternalLink size={15} />
-          </a>
+
+          <div style={{ width: '100%', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <a
+              href="/privacy"
+              onClick={(e) => {
+                if (onOpenPrivacy) {
+                  e.preventDefault();
+                  setIsOpen(false);
+                  onOpenPrivacy();
+                }
+              }}
+              className="sidebar-privacy-btn"
+              title="View Public Privacy Policy"
+            >
+              <Shield size={14} color="#60a5fa" />
+              <span>Privacy Policy</span>
+            </a>
+          </div>
         </div>
       </aside>
 

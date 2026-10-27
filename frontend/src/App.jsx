@@ -4,9 +4,19 @@ import Header from './components/Header';
 import Toast from './components/Toast';
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import { api } from './services/api';
 
+const isPrivacyPath = () => {
+  if (typeof window !== 'undefined') {
+    const p = window.location.pathname.toLowerCase();
+    return p === '/privacy' || p === '/privacy/' || p.startsWith('/privacy');
+  }
+  return false;
+};
+
 export default function App() {
+  const [currentRoute, setCurrentRoute] = useState(() => (isPrivacyPath() ? 'privacy' : 'app'));
   const [currentTab, setCurrentTab] = useState('tasks'); // 'tasks' or 'employees'
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
@@ -16,20 +26,47 @@ export default function App() {
 
   // App metrics for sidebar badges
   const [stats, setStats] = useState(null);
+  const [isSystemOnline, setIsSystemOnline] = useState(true);
 
   // Toast notification state
   const [toasts, setToasts] = useState([]);
 
+  // Listen to browser forward/back popstate
   useEffect(() => {
-    loadGlobalStats();
-  }, [refreshTrigger]);
+    const handlePopState = () => {
+      setCurrentRoute(isPrivacyPath() ? 'privacy' : 'app');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    // Only fetch operational dashboard stats when in application view
+    if (currentRoute === 'app') {
+      loadGlobalStats();
+    }
+  }, [refreshTrigger, currentRoute]);
 
   const loadGlobalStats = async () => {
     try {
       const data = await api.getDashboardStats();
       setStats(data);
+      setIsSystemOnline(true);
     } catch {
-      // Ignored here as Dashboard will catch and report
+      setIsSystemOnline(false);
+    }
+  };
+
+  const navigateTo = (route, tab = 'tasks') => {
+    if (route === 'privacy') {
+      window.history.pushState({}, '', '/privacy');
+      setCurrentRoute('privacy');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      window.history.pushState({}, '', '/');
+      setCurrentRoute('app');
+      if (tab) setCurrentTab(tab);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -51,6 +88,15 @@ export default function App() {
     }, 450);
   };
 
+  // If viewing Privacy Policy, render public standalone page without requiring authentication or backend API calls
+  if (currentRoute === 'privacy') {
+    return (
+      <div className="app-container privacy-view">
+        <PrivacyPolicy onBack={() => navigateTo('app', 'tasks')} />
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       <Sidebar
@@ -60,6 +106,7 @@ export default function App() {
         setIsOpen={setIsSidebarOpen}
         pendingCount={stats?.pending_tasks || 0}
         employeeCount={stats?.active_employees || 0}
+        onOpenPrivacy={() => navigateTo('privacy')}
       />
 
       <div className="main-wrapper">
@@ -70,6 +117,7 @@ export default function App() {
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
           onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+          isSystemOnline={isSystemOnline}
         />
 
         <main>
