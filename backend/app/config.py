@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     ENABLE_EMAIL_WORKER: bool = True
     EMAIL_WORKER_INTERVAL_SECONDS: int = 30
 
+    # Google OAuth / Gmail API Configuration
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REFRESH_TOKEN: str = ""
+    GOOGLE_SENDER_EMAIL: str = ""
+
     @property
     def cors_origins(self) -> List[str]:
         raw_origins = self.CORS_ORIGINS.strip()

@@ -1,21 +1,25 @@
 import base64
+import logging
 import os
-
-from dotenv import load_dotenv
-
-load_dotenv()
+import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
 from typing import Dict, Any, List
 
+from dotenv import load_dotenv
 from fastapi import HTTPException, status
+
+load_dotenv()
 
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
+from ..config import settings
 from ..models import Task, Employee
+
+logger = logging.getLogger("belvo.email")
 
 
 class EmailServiceError(Exception):
@@ -24,43 +28,56 @@ class EmailServiceError(Exception):
 
 
 class EmailNotConfiguredError(EmailServiceError):
-    """Raised when Gmail API credentials are not configured."""
+    """Raised when email credentials are not configured."""
     pass
 
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 
 
-def is_email_service_configured() -> bool:
+def is_gmail_api_configured() -> bool:
     """
-    Check whether the Gmail API credentials required for sending
+    Check whether the Gmail API OAuth credentials required for sending
     emails are configured.
     """
+    client_id = (settings.GOOGLE_CLIENT_ID or os.getenv("GOOGLE_CLIENT_ID", "")).strip()
+    client_secret = (settings.GOOGLE_CLIENT_SECRET or os.getenv("GOOGLE_CLIENT_SECRET", "")).strip()
+    refresh_token = (settings.GOOGLE_REFRESH_TOKEN or os.getenv("GOOGLE_REFRESH_TOKEN", "")).strip()
+    return bool(client_id and client_secret and refresh_token)
 
+
+def is_smtp_configured() -> bool:
+    """
+    Check whether standard SMTP credentials (e.g. Gmail App Password) are configured.
+    SMTP App Passwords do NOT expire every 7 days and provide permanent email delivery.
+    """
     return bool(
-        os.getenv("GOOGLE_CLIENT_ID", "").strip()
-        and os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
-        and os.getenv("GOOGLE_REFRESH_TOKEN", "").strip()
-        and os.getenv("GOOGLE_SENDER_EMAIL", "").strip()
+        settings.SMTP_HOST
+        and settings.SMTP_HOST.strip()
+        and settings.SMTP_USER
+        and settings.SMTP_USER.strip()
+        and settings.SMTP_PASSWORD
+        and settings.SMTP_PASSWORD.strip()
     )
+
+
+def is_email_service_configured() -> bool:
+    """
+    Check if either Gmail API or SMTP is configured.
+    """
+    return is_gmail_api_configured() or is_smtp_configured()
 
 
 def get_gmail_credentials() -> Credentials:
     """
     Create Gmail OAuth credentials using the refresh token.
-
-    The refresh token allows the backend to obtain fresh access
-    tokens without asking the user to authorize every time.
     """
-
-    client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
-    client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
-    refresh_token = os.getenv("GOOGLE_REFRESH_TOKEN", "").strip()
+    client_id = (settings.GOOGLE_CLIENT_ID or os.getenv("GOOGLE_CLIENT_ID", "")).strip()
+    client_secret = (settings.GOOGLE_CLIENT_SECRET or os.getenv("GOOGLE_CLIENT_SECRET", "")).strip()
+    refresh_token = (settings.GOOGLE_REFRESH_TOKEN or os.getenv("GOOGLE_REFRESH_TOKEN", "")).strip()
 
     if not client_id or not client_secret or not refresh_token:
-        raise EmailNotConfiguredError(
-            "Gmail API OAuth credentials are not configured."
-        )
+        raise EmailNotConfiguredError("Gmail API OAuth credentials are not configured.")
 
     credentials = Credentials(
         token=None,
@@ -71,57 +88,77 @@ def get_gmail_credentials() -> Credentials:
         scopes=[GMAIL_SCOPE],
     )
 
-    # Refresh the access token when required.
     if not credentials.valid:
         credentials.refresh(GoogleRequest())
 
     return credentials
 
 
+def _send_via_gmail_api(msg: MIMEMultipart, recipient_email: str) -> Dict[str, Any]:
+    """Send an email message via Gmail API."""
+    credentials = get_gmail_credentials()
+    gmail_service = build("gmail", "v1", credentials=credentials)
+    raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+    gmail_service.users().messages().send(
+        userId="me",
+        body={"raw": raw_message},
+    ).execute()
+    return {"status": "delivered", "transport": "gmail_api"}
+
+
+def _send_via_smtp(msg: MIMEMultipart, recipient_email: str) -> Dict[str, Any]:
+    """Send an email message via SMTP (e.g. Gmail with App Password)."""
+    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=20) as server:
+        if settings.SMTP_USE_TLS:
+            server.starttls()
+        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+        server.send_message(msg)
+    return {"status": "delivered", "transport": "smtp"}
+
+
 def send_task_email(task: Task, employee: Employee) -> Dict[str, Any]:
     """
-    Send a new task notification email using the Gmail API.
+    Delivers a new task notification email to the assigned employee.
 
-    The email content remains the same as the original SMTP version.
-    Only the transport mechanism has changed from SMTP to Gmail API.
+    Features resilient dual transport:
+    1. Tries Gmail API if configured.
+    2. If Gmail API fails (such as token revocation or 7-day expiration under 'Testing' mode),
+       it automatically falls back to SMTP (Gmail App Password) without failing the request.
+    3. If only SMTP is configured, sends directly via SMTP.
     """
-
     if not employee or not employee.email or not employee.email.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Assigned employee does not have a valid email address.",
         )
 
-    # Verify Gmail API configuration.
     if not is_email_service_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
                 "Email service is not configured. "
-                "Please configure GOOGLE_CLIENT_ID, "
-                "GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, "
-                "and GOOGLE_SENDER_EMAIL."
+                "Please configure Gmail API OAuth or SMTP credentials."
             ),
         )
 
-    sender_email = os.getenv("GOOGLE_SENDER_EMAIL", "").strip()
-    sender_name = os.getenv(
-        "SMTP_FROM_NAME",
-        "Belvo HR Task Management",
-    ).strip()
+    sender_email = (
+        (settings.GOOGLE_SENDER_EMAIL or os.getenv("GOOGLE_SENDER_EMAIL", "")).strip()
+        or settings.SMTP_FROM_EMAIL.strip()
+        or settings.SMTP_USER.strip()
+    )
+    sender_name = (
+        settings.SMTP_FROM_NAME.strip()
+        or os.getenv("SMTP_FROM_NAME", "Belvo HR Task Management").strip()
+    )
 
     recipient_email = employee.email.strip()
     recipient_name = employee.name.strip()
 
     subject = f"New Task Assigned: {task.title}"
-
     dept_name = task.department or employee.department or "General"
     due_date_str = str(task.due_date) if task.due_date else "Not specified"
 
-    # ---------------------------------------------------------
     # Plain text version
-    # ---------------------------------------------------------
-
     plain_text = f"""Hello {recipient_name},
 
 You have been assigned a new task on the Belvo HR platform.
@@ -143,10 +180,7 @@ Best regards,
 {sender_name}
 """
 
-    # ---------------------------------------------------------
     # HTML version
-    # ---------------------------------------------------------
-
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -232,69 +266,63 @@ Best regards,
 </html>
 """
 
-    # ---------------------------------------------------------
     # Build MIME email
-    # ---------------------------------------------------------
-
     msg = MIMEMultipart("alternative")
-
     msg["Subject"] = subject
     msg["From"] = formataddr((sender_name, sender_email))
     msg["To"] = formataddr((recipient_name, recipient_email))
 
-    part1 = MIMEText(
-        plain_text,
-        "plain",
-        "utf-8",
-    )
-
-    part2 = MIMEText(
-        html_content,
-        "html",
-        "utf-8",
-    )
-
+    part1 = MIMEText(plain_text, "plain", "utf-8")
+    part2 = MIMEText(html_content, "html", "utf-8")
     msg.attach(part1)
     msg.attach(part2)
 
-    # ---------------------------------------------------------
-    # Send through Gmail API
-    # ---------------------------------------------------------
+    # 1. Try Gmail API first if configured
+    if is_gmail_api_configured():
+        try:
+            res = _send_via_gmail_api(msg, recipient_email)
+            return {
+                "status": "delivered",
+                "recipient": recipient_email,
+                "subject": subject,
+                "transport": res["transport"],
+            }
+        except Exception as exc:
+            logger.warning(
+                f"Gmail API delivery failed ({exc}). "
+                f"{'Attempting fallback to SMTP...' if is_smtp_configured() else 'No SMTP fallback available.'}"
+            )
+            if not is_smtp_configured():
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=(
+                        f"Failed to deliver email to {recipient_email} via Gmail API: {str(exc)}. "
+                        "If your token was revoked/expired after 7 days, set your OAuth consent screen "
+                        "to 'In Production' or configure SMTP_USER & SMTP_PASSWORD with a Google App Password."
+                    ),
+                )
 
-    try:
-        credentials = get_gmail_credentials()
+    # 2. Send via SMTP (primary or fallback)
+    if is_smtp_configured():
+        try:
+            res = _send_via_smtp(msg, recipient_email)
+            return {
+                "status": "delivered",
+                "recipient": recipient_email,
+                "subject": subject,
+                "transport": res["transport"],
+            }
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to deliver email to {recipient_email} via SMTP: {str(exc)}",
+            )
 
-        gmail_service = build(
-            "gmail",
-            "v1",
-            credentials=credentials,
-        )
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Email service is not configured. Please configure Gmail API or SMTP credentials.",
+    )
 
-        raw_message = base64.urlsafe_b64encode(
-            msg.as_bytes()
-        ).decode("utf-8")
-
-        gmail_service.users().messages().send(
-            userId="me",
-            body={
-                "raw": raw_message,
-            },
-        ).execute()
-
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                f"Failed to deliver email to "
-                f"{recipient_email}: {str(exc)}"
-            ),
-        )
-
-    return {
-        "status": "delivered",
-        "recipient": recipient_email,
-        "subject": subject,
-    }
 
 def send_task_email_to_multiple(task: Task, employees: List[Employee]) -> Dict[str, Any]:
     """
@@ -311,9 +339,7 @@ def send_task_email_to_multiple(task: Task, employees: List[Employee]) -> Dict[s
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
                 "Email service is not configured. "
-                "Please configure GOOGLE_CLIENT_ID, "
-                "GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, "
-                "and GOOGLE_SENDER_EMAIL."
+                "Please configure Gmail API OAuth or SMTP credentials."
             ),
         )
 

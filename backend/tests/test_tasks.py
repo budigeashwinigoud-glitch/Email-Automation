@@ -262,6 +262,12 @@ def test_send_email_unconfigured_credentials(client, seed_employees, monkeypatch
     monkeypatch.setattr(settings, "SMTP_HOST", "")
     monkeypatch.setattr(settings, "SMTP_USER", "")
     monkeypatch.setattr(settings, "SMTP_PASSWORD", "")
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID", "")
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_SECRET", "")
+    monkeypatch.setattr(settings, "GOOGLE_REFRESH_TOKEN", "")
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "")
+    monkeypatch.setenv("GOOGLE_REFRESH_TOKEN", "")
 
     emp = seed_employees[0]
     task = client.post("/api/tasks", json={
@@ -455,3 +461,38 @@ def test_send_email_to_all(client, seed_employees, monkeypatch):
     # Verify all 5 active seed employees received the email
     assert len(sent_recipients) == 5
     assert set(sent_recipients) == {e.email for e in seed_employees}
+
+
+def test_send_email_gmail_api_revoked_falls_back_to_smtp(seed_employees, monkeypatch):
+    """When Gmail API token expires/is revoked after 7 days, it seamlessly falls back to SMTP."""
+    from app.config import settings
+    from app.services.email import send_task_email
+    from app.models import Task
+
+    monkeypatch.setattr(settings, "SMTP_HOST", "smtp.gmail.com")
+    monkeypatch.setattr(settings, "SMTP_PORT", 587)
+    monkeypatch.setattr(settings, "SMTP_USER", "sender@gmail.com")
+    monkeypatch.setattr(settings, "SMTP_PASSWORD", "app-password-secret")
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID", "dummy-id")
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_SECRET", "dummy-secret")
+    monkeypatch.setattr(settings, "GOOGLE_REFRESH_TOKEN", "expired-token-7days")
+
+    def mock_gmail_fail(msg, recipient):
+        raise Exception("invalid_grant: Token has been expired or revoked.")
+
+    smtp_sent = []
+    def mock_smtp_success(msg, recipient):
+        smtp_sent.append(recipient)
+        return {"status": "delivered", "transport": "smtp"}
+
+    monkeypatch.setattr("app.services.email._send_via_gmail_api", mock_gmail_fail)
+    monkeypatch.setattr("app.services.email._send_via_smtp", mock_smtp_success)
+
+    emp = seed_employees[0]
+    task = Task(id=1, title="Test Token Revoked", description="Testing fallback", priority="High", assigned_to=emp.id)
+
+    result = send_task_email(task, emp)
+    assert result["status"] == "delivered"
+    assert result["transport"] == "smtp"
+    assert smtp_sent == [emp.email]
+

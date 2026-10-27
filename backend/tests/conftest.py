@@ -8,6 +8,11 @@ from fastapi.testclient import TestClient
 
 # Keep test startup isolated from a developer's or deployment's real database.
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+os.environ["ENABLE_EMAIL_WORKER"] = "false"
+os.environ["GOOGLE_CLIENT_ID"] = ""
+os.environ["GOOGLE_CLIENT_SECRET"] = ""
+os.environ["GOOGLE_REFRESH_TOKEN"] = ""
+os.environ["GOOGLE_SENDER_EMAIL"] = ""
 
 from app.main import app
 from app.database import Base, get_db
