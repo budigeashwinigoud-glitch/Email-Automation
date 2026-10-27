@@ -5,18 +5,20 @@ import Toast from './components/Toast';
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 import { api } from './services/api';
 
-const isPrivacyPath = () => {
+const getInitialRoute = () => {
   if (typeof window !== 'undefined') {
     const p = window.location.pathname.toLowerCase();
-    return p === '/privacy' || p === '/privacy/' || p.startsWith('/privacy');
+    if (p === '/privacy' || p === '/privacy/' || p.startsWith('/privacy')) return 'privacy';
+    if (p === '/terms' || p === '/terms/' || p.startsWith('/terms')) return 'terms';
   }
-  return false;
+  return 'app';
 };
 
 export default function App() {
-  const [currentRoute, setCurrentRoute] = useState(() => (isPrivacyPath() ? 'privacy' : 'app'));
+  const [currentRoute, setCurrentRoute] = useState(getInitialRoute);
   const [currentTab, setCurrentTab] = useState('tasks'); // 'tasks' or 'employees'
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
@@ -34,7 +36,7 @@ export default function App() {
   // Listen to browser forward/back popstate
   useEffect(() => {
     const handlePopState = () => {
-      setCurrentRoute(isPrivacyPath() ? 'privacy' : 'app');
+      setCurrentRoute(getInitialRoute());
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -62,6 +64,10 @@ export default function App() {
       window.history.pushState({}, '', '/privacy');
       setCurrentRoute('privacy');
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (route === 'terms') {
+      window.history.pushState({}, '', '/terms');
+      setCurrentRoute('terms');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       window.history.pushState({}, '', '/');
       setCurrentRoute('app');
@@ -88,11 +94,19 @@ export default function App() {
     }, 450);
   };
 
-  // If viewing Privacy Policy, render public standalone page without requiring authentication or backend API calls
+  // If viewing Privacy Policy or Terms of Service, render public standalone page
   if (currentRoute === 'privacy') {
     return (
       <div className="app-container privacy-view">
         <PrivacyPolicy onBack={() => navigateTo('app', 'tasks')} />
+      </div>
+    );
+  }
+
+  if (currentRoute === 'terms') {
+    return (
+      <div className="app-container privacy-view">
+        <TermsOfService onBack={() => navigateTo('app', 'tasks')} />
       </div>
     );
   }
@@ -107,6 +121,7 @@ export default function App() {
         pendingCount={stats?.pending_tasks || 0}
         employeeCount={stats?.active_employees || 0}
         onOpenPrivacy={() => navigateTo('privacy')}
+        onOpenTerms={() => navigateTo('terms')}
       />
 
       <div className="main-wrapper">

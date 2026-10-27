@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckSquare, Users, Layers, ExternalLink, Sparkles, Shield } from 'lucide-react';
+import { CheckSquare, Users, Layers, ExternalLink, Sparkles, Shield, FileText } from 'lucide-react';
 
 export default function Sidebar({
   currentTab,
@@ -9,6 +9,7 @@ export default function Sidebar({
   pendingCount = 0,
   employeeCount = 0,
   onOpenPrivacy,
+  onOpenTerms,
 }) {
   return (
     <>
@@ -76,7 +77,7 @@ export default function Sidebar({
             </a>
           </div>
 
-          <div style={{ width: '100%', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <div style={{ width: '100%', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <a
               href="/privacy"
               onClick={(e) => {
@@ -91,6 +92,22 @@ export default function Sidebar({
             >
               <Shield size={14} color="#60a5fa" />
               <span>Privacy Policy</span>
+            </a>
+
+            <a
+              href="/terms"
+              onClick={(e) => {
+                if (onOpenTerms) {
+                  e.preventDefault();
+                  setIsOpen(false);
+                  onOpenTerms();
+                }
+              }}
+              className="sidebar-privacy-btn"
+              title="View Public Terms of Service"
+            >
+              <FileText size={14} color="#a78bfa" />
+              <span>Terms of Service</span>
             </a>
           </div>
         </div>
